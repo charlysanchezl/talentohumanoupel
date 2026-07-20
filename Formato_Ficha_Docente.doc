@@ -1,0 +1,196 @@
+<html xmlns:v="urn:schemas-microsoft-com:vml"
+xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns:m="http://schemas.microsoft.com/office/2004/12/omml"
+xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>Ficha Docente</title>
+<!--[if gte mso 9]><xml>
+ <w:WordDocument>
+  <w:View>Print</w:View>
+  <w:Zoom>100</w:Zoom>
+ </w:WordDocument>
+</xml><![endif]-->
+<style>
+  body { font-family: "Times New Roman", Times, serif; font-size: 11pt; color: black; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 10px; }
+  td { padding: 3px 5px; vertical-align: top; }
+</style>
+</head>
+<body>
+
+  <!-- Cabecera -->
+  <table style="width: 100%; margin-bottom: 10px; border-bottom: 1px solid black; border-collapse: collapse;">
+    <tr>
+      <td style="width: 15%; text-align: center; vertical-align: middle; border: none;">
+        <!-- Espacio para el logo -->
+        <div style="height: 70px; width: 70px; border: 1px dashed #ccc; display: inline-block; font-size: 8pt; color: #999; text-align: center; line-height: 70px;">Logo UPEL</div>
+      </td>
+      <td style="width: 70%; text-align: center; vertical-align: middle; border: none;">
+        <div style="font-weight: bold; font-size: 11pt;">REPÚBLICA BOLIVARIANA DE VENEZUELA</div>
+        <div style="font-weight: bold; font-size: 11pt;">UNIVERSIDAD PEDAGÓGICA EXPERIMENTAL LIBERTADOR</div>
+        <div style="font-weight: bold; font-size: 11pt;">INSTITUTO PEDAGÓGICO RURAL "GERVASIO RUBIO"</div>
+        <div style="font-weight: bold; font-size: 11pt;">UNIDAD DE PERSONAL</div>
+        <div style="font-weight: bold; font-size: 11pt;">SECCIÓN APOYO TÉCNICO</div>
+        <div style="font-weight: bold; margin-top: 5px; font-size: 13pt;">FICHA OFERTA ACADÉMICA PREGRADO</div>
+        <div style="font-weight: bold; font-size: 13pt;">DOCENTE CONTRATADO</div>
+      </td>
+      <td style="width: 15%; border: none;"></td>
+    </tr>
+  </table>
+
+  <!-- Info Periodo -->
+  <table style="width: 100%; border-collapse: collapse; border: 1px solid black; font-size: 11pt; margin-bottom: 10px;">
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 15%; font-weight: bold; background-color: #f9f9f9;">LAPSO:</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 35%;">Total Semanas: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 20%; font-weight: bold; background-color: #f9f9f9;">PERIODO ACADÉMICO:</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 30%;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">DEPARTAMENTO:</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">VIGENCIA:</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">Desde: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Hasta: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+    </tr>
+  </table>
+
+  <!-- Datos Personales -->
+  <table style="width: 100%; border-collapse: collapse; border: 1px solid black; font-size: 11pt; margin-bottom: 10px;">
+    <tr>
+      <td colspan="4" style="border: 1px solid black; border-bottom: 1px solid black; padding: 3px 5px; text-align: left; font-weight: bold; background-color: #f0f0f0;">
+        DATOS PERSONALES <span style="font-weight: normal; font-style: italic; font-size: 9pt; margin-left: 10px;">Información para ser llenada por el Docente</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 15%; font-weight: bold; background-color: #f9f9f9;">APELLIDOS:</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 35%;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 15%; font-weight: bold; background-color: #f9f9f9;">NOMBRES:</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 35%;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">C.I.:</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">FECHA NAC.:</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">RIF.:</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">TELÉFONOS:</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">DIRECCIÓN:</td>
+      <td colspan="3" style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">CTA. BANCARIA:</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">BANCO/TIPO:</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+  </table>
+
+  <!-- Datos Académicos -->
+  <table style="width: 100%; border-collapse: collapse; border: 1px solid black; font-size: 11pt; margin-bottom: 10px;">
+    <tr>
+      <td colspan="4" style="border: 1px solid black; border-bottom: 1px solid black; padding: 3px 5px; text-align: left; font-weight: bold; background-color: #f0f0f0;">
+        DATOS ACADÉMICOS
+      </td>
+    </tr>
+    <tr>
+      <td colspan="1" style="border: 1px solid black; padding: 3px 5px; width: 25%; font-weight: bold; background-color: #f9f9f9;">TÍTULOS PREGRADO:</td>
+      <td colspan="3" style="border: 1px solid black; padding: 3px 5px; width: 75%;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td colspan="1" style="border: 1px solid black; padding: 3px 5px; font-weight: bold; background-color: #f9f9f9;">TÍTULOS POSTGRADO:</td>
+      <td colspan="3" style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 25%; font-weight: bold; background-color: #f9f9f9;">CATEGORÍA DOCENTE:</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 25%;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 25%; font-weight: bold; background-color: #f9f9f9;">DEDICACIÓN:</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 25%;">&nbsp;</td>
+    </tr>
+  </table>
+
+  <!-- Oferta Académica -->
+  <table style="width: 100%; border-collapse: collapse; border: 1px solid black; text-align: center; font-size: 11pt; margin-bottom: 20px;">
+    <tr>
+      <td colspan="4" style="border: 1px solid black; padding: 3px 5px; text-align: left; font-weight: bold; background-color: #f0f0f0;">
+        DATOS OFERTA ACADÉMICA <span style="font-weight: normal; font-style: italic; font-size: 9pt; margin-left: 10px;">Datos para ser llenados por el Jefe de Dpto.</span>
+      </td>
+    </tr>
+    <tr style="background-color: #f9f9f9; font-weight: bold;">
+      <td style="border: 1px solid black; padding: 3px 5px; width: 10%;">NRO</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 50%;">MATERIA - UNIDAD CURRICULAR</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 20%;">HORAS SEMANAL</td>
+      <td style="border: 1px solid black; padding: 3px 5px; width: 20%;">HORAS LAPSO</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px;">01</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px;">02</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px;">03</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid black; padding: 3px 5px;">04</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td colspan="2" style="border: 1px solid black; padding: 3px 5px; text-align: right; font-weight: bold;">TOTAL, HORAS LAPSO:</td>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold;">&nbsp;</td>
+      <td style="border: 1px solid black; padding: 3px 5px; font-weight: bold;">&nbsp;</td>
+    </tr>
+  </table>
+
+  <!-- Firmas -->
+  <table style="width: 100%; border-collapse: collapse; margin-top: 70px;">
+    <tr>
+      <td style="width: 40%; text-align: center; vertical-align: top; border: none;">
+        <div style="border-bottom: 1px solid black; height: 30px; margin: 0 auto; width: 80%;"></div>
+        <div style="margin-top: 5px; font-weight: bold; font-size: 11pt;">FIRMA DEL DOCENTE</div>
+        <div style="font-size: 9pt; margin-top: 2px;">Nota: Doy fe de los datos suministrados.</div>
+      </td>
+      <td style="width: 20%; border: none;"></td>
+      <td style="width: 40%; text-align: center; vertical-align: top; border: none;">
+        <div style="border-bottom: 1px solid black; height: 30px; margin: 0 auto; width: 80%;"></div>
+        <div style="margin-top: 5px; font-weight: bold; font-size: 11pt;">FIRMA JEFE DEPARTAMENTO</div>
+      </td>
+    </tr>
+  </table>
+
+  <div style="margin-top: 15px; font-size: 10pt; font-weight: bold;">
+    Anexo: C.I. DOCENTE – COPIA TITULO - RESOLUCIÓN DE CATEGORIA
+  </div>
+
+  <!-- Pie de Página - Dirección -->
+  <div style="text-align: center; margin-top: 30px; font-size: 10pt; font-style: italic;">
+    Final Avenida Dr Manuel Pulido Mendez Via Bramon Rubio - Estado Tachira
+  </div>
+
+  <!-- Lema de la Universidad (Movido al final) -->
+  <div style="text-align: center; margin-top: 5px;">
+    <p style="font-family: 'Times New Roman', Times, serif; font-size: 11pt; color: #000; margin: 0; font-weight: bold;">
+      "La Universidad de los Maestros"
+    </p>
+  </div>
+
+</body>
+</html>

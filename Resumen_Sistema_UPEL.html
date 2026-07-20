@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Dossier Técnico - Sistema UPEL</title>
+<style>
+  :root {
+    --primary: #1e3a8a; /* Azul institucional profundo */
+    --secondary: #3b82f6;
+    --text: #334155;
+    --light-bg: #f8fafc;
+  }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: var(--text);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #e2e8f0;
+  }
+  .document {
+    background-color: white;
+    width: 210mm; /* A4/Letter approx width */
+    min-height: 297mm;
+    margin: 2rem auto;
+    padding: 25mm 20mm;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+  }
+  .header {
+    text-align: center;
+    border-bottom: 3px solid var(--primary);
+    padding-bottom: 25px;
+    margin-bottom: 35px;
+  }
+  .header img {
+    width: 90px;
+    height: auto;
+    margin-bottom: 15px;
+  }
+  .republic-text {
+    font-size: 10pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin: 0;
+    color: #000;
+  }
+  h1 {
+    color: var(--primary);
+    font-size: 22pt;
+    margin: 25px 0 10px 0;
+    font-weight: 700;
+  }
+  .subtitle {
+    font-size: 14pt;
+    color: #64748b;
+    margin: 0;
+    font-weight: 500;
+  }
+  h2 {
+    color: var(--primary);
+    font-size: 16pt;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 8px;
+    margin-top: 35px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h3 {
+    color: var(--secondary);
+    font-size: 13pt;
+    margin-top: 20px;
+    margin-bottom: 10px;
+  }
+  p {
+    font-size: 11.5pt;
+    text-align: justify;
+    margin-bottom: 15px;
+  }
+  ul {
+    font-size: 11.5pt;
+    padding-left: 20px;
+  }
+  li {
+    margin-bottom: 10px;
+    text-align: justify;
+  }
+  strong {
+    color: #0f172a;
+  }
+  .highlight-box {
+    background-color: var(--light-bg);
+    border-left: 4px solid var(--secondary);
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 0 8px 8px 0;
+  }
+  .footer {
+    text-align: center;
+    font-size: 10pt;
+    color: #94a3b8;
+    margin-top: 60px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 20px;
+    font-style: italic;
+  }
+  
+  /* Optimizaciones para Impresión / Guardar como PDF */
+  @media print {
+    body { background-color: white; }
+    .document {
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+      width: 100%;
+    }
+    .page-break { page-break-before: always; }
+  }
+</style>
+</head>
+<body>
+
+<div class="document">
+  
+  <div class="header">
+    <img src="public/logo.jpg" alt="Logo UPEL" onerror="this.style.display='none'" />
+    <p class="republic-text">República Bolivariana de Venezuela</p>
+    <p class="republic-text">Universidad Pedagógica Experimental Libertador</p>
+    <p class="republic-text">Instituto Pedagógico Rural "Gervasio Rubio"</p>
+    
+    <h1>DOSSIER TÉCNICO Y OPERATIVO</h1>
+    <p class="subtitle">Plataforma de Gestión de Fichas de Oferta Académica</p>
+  </div>
+
+  <p>El presente documento expone las características estructurales, funcionales y operativas del <strong>Sistema de Gestión de Talento Humano y Oferta Académica</strong>, desarrollado de forma exclusiva para el Instituto Pedagógico Rural "Gervasio Rubio" (UPEL). Esta plataforma representa un avance significativo hacia la modernización, digitalización y optimización de los procesos administrativos relacionados con el personal docente contratado de la institución.</p>
+
+  <div class="highlight-box">
+    <strong>Objetivo Principal:</strong> Centralizar, validar y resguardar la información sociodemográfica y académica de los docentes contratados, garantizando la emisión automatizada y estandarizada de la <em>Ficha de Oferta Académica de Pregrado</em> en los formatos exigidos por la Unidad de Personal.
+  </div>
+
+  <h2>1. Arquitectura de Roles y Privilegios</h2>
+  <p>Para asegurar la integridad, confidencialidad y correcto flujo de la información, el sistema implementa una arquitectura basada en tres niveles de acceso jerárquico:</p>
+
+  <h3>A. Nivel Administrador (Unidad de Personal / Informática)</h3>
+  <ul>
+    <li><strong>Visión Global:</strong> Acceso ininterrumpido al directorio unificado de todo el personal docente de la institución, organizado algorítmicamente por departamentos académicos y número de cédula.</li>
+    <li><strong>Auditoría y Corrección:</strong> Capacidad exclusiva para rectificar errores tipográficos en datos sensibles (nombres, apellidos y asignación de departamento) generados durante el registro, asegurando la pulcritud de la base de datos.</li>
+    <li><strong>Gestión de Credenciales:</strong> Control absoluto sobre la creación, habilitación y asignación de cuentas para los Jefes de Departamento.</li>
+    <li><strong>Emisión de Reportes:</strong> Facultad para visualizar, exportar e imprimir el expediente completo (Ficha Oficial) de cualquier docente activo en el instituto.</li>
+  </ul>
+
+  <h3>B. Nivel Jefe de Departamento</h3>
+  <ul>
+    <li><strong>Control Sectorizado:</strong> Supervisión y gestión restringida únicamente a los profesionales adscritos a su respectivo departamento (ej. Matemáticas, Pedagogía, Ciencias Sociales).</li>
+    <li><strong>Filtro Antiduplicación:</strong> Responsabilidad de ingresar al sistema a los nuevos docentes mediante un motor de validación riguroso que detecta y bloquea intentos de registros con números de cédula ya existentes.</li>
+    <li><strong>Planificación Académica:</strong> Administra en su totalidad la asignación de la oferta académica (Unidades Curriculares), definiendo las horas semanales y de lapso de cada docente. Soporta importación y actualización masiva mediante archivos de Excel.</li>
+    <li><strong>Proceso de Validación:</strong> Facultado para revisar los datos completados por el docente y otorgar la validación final ("Visto Bueno") del expediente.</li>
+  </ul>
+
+  <h3>C. Nivel Docente Contratado</h3>
+  <ul>
+    <li><strong>Autogestión de Perfil:</strong> Acceso a un portal personal e intuitivo diseñado para facilitar la carga de su información demográfica, académica y bancaria (vital para la tramitación de nómina).</li>
+    <li><strong>Transparencia:</strong> Visualización en tiempo real de las unidades curriculares y horas asignadas por su Jefe de Departamento, fungiendo como mecanismo de verificación mutua.</li>
+    <li><strong>Seguridad de Datos:</strong> Sistema aislado donde el profesional interactúa exclusivamente con su propio expediente.</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <h2>2. Especificaciones Técnicas y de Diseño (UI/UX)</h2>
+  <p>La interfaz gráfica del usuario (GUI) ha sido meticulosamente diseñada bajo los estándares modernos de usabilidad (UX) e identidad visual corporativa:</p>
+  <ul>
+    <li><strong>Motor de Impresión Fidedigno:</strong> El módulo de exportación convierte los datos digitales en una réplica exacta del formato físico legal requerido por Recursos Humanos. Incluye cabeceras institucionales, espacios de firma estructurados y los lemas rectores de la UPEL, optimizado para impresión o conversión a Microsoft Word.</li>
+    <li><strong>Diseño Responsivo (Responsive Design):</strong> La plataforma se adapta fluidamente a cualquier resolución de pantalla. Cuenta con navegación móvil optimizada y contenedores de tablas elásticas (<code>table-responsive</code>) que previenen la pérdida de información en teléfonos inteligentes y tabletas.</li>
+    <li><strong>Identidad Institucional:</strong> Adopción de una paleta cromática basada en tonos azules y blancos (minimalismo funcional), lo que reduce la fatiga visual y proyecta sobriedad institucional. Incorpora animaciones de transición sutiles y expansiones de ventanas modales para maximizar el área de trabajo.</li>
+    <li><strong>Exportación Inteligente:</strong> Herramienta avanzada de exportación a hojas de cálculo (Excel) con formatos profesionales pre-aplicados (encabezados, anchos de columna dinámicos y bordes) gracias a la integración de librerías especializadas (<code>xlsx-js-style</code>).</li>
+  </ul>
+
+  <h2>3. Impacto y Beneficios Institucionales</h2>
+  <p>La implementación de este sistema representa un salto cualitativo en la gestión administrativa del Instituto Pedagógico Rural "Gervasio Rubio":</p>
+  <ul>
+    <li><strong>Sustentabilidad:</strong> Reducción drástica del uso de papel ("Cero Papel") y materiales de oficina en las etapas de recopilación y corrección de datos.</li>
+    <li><strong>Eficiencia Operativa:</strong> Minimiza los cuellos de botella burocráticos al permitir que el docente autogestione sus datos básicos y el Jefe de Departamento se enfoque exclusivamente en la planificación académica.</li>
+    <li><strong>Integridad de Datos:</strong> Elimina la duplicidad de registros y la pérdida de información mediante centralización estructurada.</li>
+  </ul>
+
+  <div class="footer">
+    <p>"La Universidad de los Maestros"</p>
+    <p>Documento generado por el Sistema de Talento Humano UPEL<br>©2026 Unidad de Informática - UPEL- RUBIO Venezuela</p>
+  </div>
+
+</div>
+
+</body>
+</html>
