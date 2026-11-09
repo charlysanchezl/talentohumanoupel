@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Diagrama de Funciones y Flujo Operativo - SIGOA V3.0</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ 
+      startOnLoad: true, 
+      theme: 'neutral',
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #0f172a;
+      background-color: #ffffff;
+      line-height: 1.5;
+      padding: 2.5rem 3rem;
+    }
+
+    .header-inst {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid #002f6c;
+      padding-bottom: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .header-title h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #002f6c;
+      letter-spacing: -0.02em;
+    }
+
+    .header-title .subtitle {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #008744;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.2rem;
+    }
+
+    .badge-v3 {
+      background: #eef4fc;
+      border: 1px solid #bfdbfe;
+      color: #002f6c;
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #002f6c;
+      margin: 2rem 0 1rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-left: 4px solid #008744;
+      padding-left: 0.75rem;
+    }
+
+    p {
+      font-size: 0.92rem;
+      color: #334155;
+      margin-bottom: 1rem;
+    }
+
+    .diagram-container {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: center;
+      page-break-inside: avoid;
+    }
+
+    .diagram-container svg {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      margin-bottom: 2rem;
+      font-size: 0.88rem;
+    }
+
+    th {
+      background: #002f6c;
+      color: white;
+      text-align: left;
+      padding: 0.75rem 1rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #e2e8f0;
+      color: #1e293b;
+    }
+
+    tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    .footer-doc {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+
+    .page-break {
+      page-break-before: always;
+      break-before: page;
+    }
+
+    @media print {
+      body {
+        padding: 1.5cm;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ENCABEZADO INSTITUCIONAL -->
+  <div class="header-inst">
+    <div class="header-title">
+      <h1>SIGOA - Talento Humano UPEL</h1>
+      <div class="subtitle">Subdirección de Docencia • Coordinación de Talento Humano</div>
+    </div>
+    <div class="badge-v3">Documentación Oficial V3.0</div>
+  </div>
+
+  <p>Este documento consolida la arquitectura funcional, las responsabilidades de cada módulo y el diagrama de flujo operativo de extremo a extremo para el <strong>Sistema Integral de Gestión y Organización Académica (SIGOA)</strong> de la Universidad Pedagógica Experimental Libertador.</p>
+
+  <!-- SECCIÓN 1: DIAGRAMA DE FUNCIONES -->
+  <h2>1. Diagrama de Funciones por Módulo</h2>
+  <div class="diagram-container">
+    <pre class="mermaid">
+flowchart TD
+    SIGOA["SIGOA - Talento Humano UPEL (V3.0)"]
+
+    SIGOA --> M1["1. Portal Docente Público"]
+    SIGOA --> M2["2. Gestión de Lapsos y Períodos"]
+    SIGOA --> M3["3. Consulta y Auditoría Docente"]
+    SIGOA --> M4["4. Módulo Financiero y Nómina TXT"]
+    SIGOA --> M5["5. Jefaturas de Departamento"]
+    SIGOA --> M6["6. Seguridad, Bitácora y Respaldos"]
+    SIGOA --> M7["7. Red Resiliente P2P"]
+
+    M1 --> P1["Validación Cédula / Clave 4 dígitos"]
+    M1 --> P2["Registro Autónomo y Cuentas Bancarias"]
+    M1 --> P3["Descarga Ficha Oficial con QR"]
+    M1 --> P4["Guía de Acceso y Preguntas Frecuentes"]
+
+    M2 --> L1["Ciclo: Planificación / Activo / Cerrado"]
+    M2 --> L2["Propagación Masiva de Semanas y Vigencias"]
+    M2 --> L3["Replicación entre Lapsos e Historial"]
+
+    M3 --> C1["Filtros: Período, Departamento y Sede"]
+    M3 --> C2["Navegación Instantánea RAM (0 ms)"]
+    M3 --> C3["Envío de Fichas al Correo Institucional"]
+
+    M4 --> N1["Generador TXT Banco de Venezuela (BDV Posicional)"]
+    M4 --> N2["Generador TXT Multibanco (Banesco, Mercantil, etc.)"]
+    M4 --> N3["Auditoría Preventiva de Cuentas de 20 dígitos"]
+    M4 --> N4["Carga de Archivo de Respuesta y Conciliación"]
+
+    M5 --> J1["Asignación de Horas Semanales y Lapso"]
+    M5 --> J2["Control de Secciones y Cupos"]
+    M5 --> J3["Aprobación de Carga ('Validada')"]
+
+    M6 --> S1["Roles: ADMIN, DOCENCIA, JEFE, AUDITOR"]
+    M6 --> S2["Bitácora Transaccional (audit_logs)"]
+    M6 --> S3["Bóveda de Respaldos SQL y JSON en Vivo"]
+
+    M7 --> A1["Malla P2P WebRTC sin Internet"]
+    M7 --> A2["Sincronización Automática Offline/Online"]
+    M7 --> A3["Buscador Global Rápido (Ctrl + K)"]
+    </pre>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- SECCIÓN 2: FLUJO OPERATIVO -->
+  <h2>2. Diagrama de Flujo del Ciclo Operativo Completo</h2>
+  <div class="diagram-container">
+    <pre class="mermaid">
+flowchart TD
+    INICIO(["Inicio: Apertura de Lapso"]) --> F1
+
+    subgraph F1 ["Fase 1: Apertura Académica (Docencia / Admin)"]
+        F1_1["Activar Período (ej. 2026-I)"] --> F1_2["Definir Semanas (15) y Fechas Desde/Hasta"]
+        F1_2 --> F1_3["Propagar Fechas a la Plantilla Docente"]
+    end
+
+    subgraph F2 ["Fase 2: Portal Docente (Autogestión)"]
+        F1_3 --> F2_1["Docente ingresa con Cédula y Clave"]
+        F2_1 --> F2_2{"¿Registrado?"}
+        F2_2 -- No --> F2_3["Registro: Datos y Cuenta Bancaria (20 dígitos)"]
+        F2_2 -- Sí --> F2_4["Verificar / Actualizar Datos"]
+        F2_3 --> F2_5["Estatus: 'Por Revisar'"]
+        F2_4 --> F2_5
+    end
+
+    subgraph F3 ["Fase 3: Jefatura de Departamento"]
+        F2_5 --> F3_1["Jefe asigna Materias, Secciones y Horas"]
+        F3_1 --> F3_2{"¿Carga Aprobada?"}
+        F3_2 -- No --> F3_1
+        F3_2 -- Sí --> F3_3["Cambiar Estatus a 'Validada'"]
+    end
+
+    subgraph F4 ["Fase 4: Emisión y Despacho"]
+        F3_3 --> F4_1["Generar Ficha con Firma y Código QR"]
+        F4_1 --> F4_2["Envío al Correo Institucional / Descarga PDF"]
+    end
+
+    subgraph F5 ["F5: Talento Humano y Finanzas"]
+        F4_2 --> F5_1["Auditoría Preventiva de Cuentas"]
+        F5_1 --> F5_2{"¿Cuentas Válidas?"}
+        F5_2 -- Con Errores --> F5_ALERT["Notificar Docente vía WhatsApp/Email"]
+        F5_ALERT --> F2_4
+        F5_2 -- Correctas --> F5_3["Generar TXT Nómina BDV Posicional / Multibanco"]
+        F5_3 --> F5_4["Dispersión Bancaria y Conciliación"]
+    end
+
+    subgraph F6 ["Fase 6: Cierre del Lapso"]
+        F5_4 --> F6_1["Respaldo en Bóveda SQL / JSON"]
+        F6_1 --> F6_2["Archivar Histórico de Cargas"]
+        F6_2 --> F6_3["Cerrar Período Académico"]
+    end
+
+    F6_3 --> FIN(["Fin: Lapso Culminado con Éxito"])
+    </pre>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- SECCIÓN 3: MATRIZ DE ROLES -->
+  <h2>3. Matriz Institucional de Roles y Permisos</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 22%;">Rol</th>
+        <th style="width: 28%;">Módulos Habilitados</th>
+        <th style="width: 50%;">Alcance Operativo y Funcional</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Docente (Público)</strong></td>
+        <td>Portal Docente</td>
+        <td>Registro personal y bancario, consulta de estatus y descarga de Ficha Oficial con QR. Sin acceso al panel administrativo.</td>
+      </tr>
+      <tr>
+        <td><strong>Jefe de Departamento</strong></td>
+        <td>Mi Departamento, Avisos, Consulta</td>
+        <td>Asignación de asignaturas, secciones, horas semanales y aprobación formal de la carga horaria de su especialidad.</td>
+      </tr>
+      <tr>
+        <td><strong>Subdirección Docencia</strong></td>
+        <td>Gestión de Lapsos, Oferta Institucional</td>
+        <td>Planificación académica, apertura y control de calendarios, supervisión de cupos y vigencias de lapsos.</td>
+      </tr>
+      <tr>
+        <td><strong>Talento Humano (ADMIN)</strong></td>
+        <td>Acceso Global Total</td>
+        <td>Auditoría financiera, generación de archivos TXT bancarios para pagos de nómina, gestión de usuarios, bitácora y respaldos.</td>
+      </tr>
+      <tr>
+        <td><strong>Auditor</strong></td>
+        <td>Dashboard, Consulta, Bitácora, Bóveda</td>
+        <td>Supervisión de integridad de datos, consulta histórica y fiscalización institucional con permisos de solo lectura.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer-doc">
+    <div><strong>Universidad Pedagógica Experimental Libertador (UPEL)</strong> • Instituto Pedagógico Rural Gervasio Rubio</div>
+    <div>Documento Generado el 28/09/2026 • Sistema SIGOA V3.0</div>
+  </div>
+
+</body>
+</html>

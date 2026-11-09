@@ -5,7 +5,7 @@ const Footer = ({ fontSize = '1.8rem', color = 'var(--primary)', subColor = 'var
     <div style={{
       textAlign: 'center',
       padding: '1.5rem',
-      marginTop: 'auto', // Para empujarlo al fondo si el contenedor padre es flex column
+      marginTop: 'auto',
       width: '100%',
       flexShrink: 0,
       zIndex: 50,
@@ -22,12 +22,18 @@ const Footer = ({ fontSize = '1.8rem', color = 'var(--primary)', subColor = 'var
         "La Universidad de los Maestros"
       </p>
       <p style={{
-        fontSize: '0.9rem',
+        fontSize: '0.85rem',
         color: subColor,
-        marginTop: '0.5rem',
-        fontWeight: 500
+        marginTop: '0.4rem',
+        fontWeight: 500,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px'
       }}>
-        ©2026 Unidad de Informática - UPEL- RUBIO Venezuela
+        <span>© {new Date().getFullYear()} Unidad de Informática • UPEL - Rubio</span>
+        <span>•</span>
+        <span style={{ color: 'var(--upel-green, #008744)', fontWeight: 600 }}>La Ciudad Pontálida • Estado Táchira</span>
       </p>
     </div>
   );

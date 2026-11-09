@@ -1,39 +1,139 @@
-import React, { useState } from 'react';
-import { getStaffData, createStaff, getRegistrationStatus } from '../data';
-import { CheckCircle, ShieldAlert, Clock, Printer } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  getStaffData, 
+  createStaff, 
+  getRegistrationStatus, 
+  getAcademicPeriodsList, 
+  getLoginBgConfig, 
+  isExpedienteCompleto 
+} from '../data';
+import { ShieldAlert } from 'lucide-react';
 import PrintableFicha from './PrintableFicha';
-import Footer from './Footer';
+import MaintenanceLockscreen from './MaintenanceLockscreen';
+
+// Subcomponentes modulares de Portal Docente y Wizard de Registro
+import RegistrationFloatingMenu from './registration/RegistrationFloatingMenu';
+import RegistrationHeader from './registration/RegistrationHeader';
+import RegistrationFooter from './registration/RegistrationFooter';
+import RegistrationAccessCard from './registration/RegistrationAccessCard';
+import RegistrationForgotPassModal from './registration/RegistrationForgotPassModal';
+import RegistrationFirstLoginModal from './registration/RegistrationFirstLoginModal';
+import RegistrationStatusView from './registration/RegistrationStatusView';
+import RegistrationSuccessCard from './registration/RegistrationSuccessCard';
+import RegistrationWizard from './registration/wizard/RegistrationWizard';
 
 const PublicRegistration = () => {
-  // Steps: 1: Validar Cédula, 2: Formulario, 3: Exito Registro, 4: Ver Estado, 5: Imprimir Ficha
+  // Steps: 1: Validar Cédula, 2: Formulario, 3: Exito Registro, 4: Ver Estado, 5: Imprimir Ficha, 6: Primer Ingreso Clave
   const [step, setStep] = useState(1); 
+  const [formStep, setFormStep] = useState(1);
   const [cedulaInput, setCedulaInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [firstLoginError, setFirstLoginError] = useState('');
+  
+  // Modal de recuperación de contraseña
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotCedula, setForgotCedula] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
+  const [isForgotLoading, setIsForgotLoading] = useState(false);
+
+  // Estados de autenticación y carga
   const [errorAuth, setErrorAuth] = useState('');
   const [registeredStaff, setRegisteredStaff] = useState(null);
+  const [fichasLapsos, setFichasLapsos] = useState([]);
+  const [selectedLapso, setSelectedLapso] = useState('');
   const [isRegistrationOpen, setIsRegistrationOpen] = useState(true);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validatingName, setValidatingName] = useState('');
+  const [isSendFichaModalOpen, setIsSendFichaModalOpen] = useState(false);
 
-  React.useEffect(() => {
-    setIsRegistrationOpen(getRegistrationStatus());
-  }, []);
+  // Fondo institucional
+  const [bgImage, setBgImage] = useState('/universidad.jpeg');
+  const [bgOpacity, setBgOpacity] = useState(0.55);
 
-  // Estado del Formulario
+  // Formulario Docente
   const [formData, setFormData] = useState({
     department: '',
-    apellidos: '', nombres: '', cedula: '', fechaNac: '', rif: '', correo: '', direccion: '', telefonos: '',
+    apellidos: '', nombres: '', cedula: '', fechaNac: '', rif: '', correo: '', correoInstitucional: '', direccion: '', telefonos: '',
     cuentaBancaria: '', banco: '', tipoCuenta: 'Ahorro', titulosPregrado: '', titulosPostgrado: '', doctorado: '',
     categoriaDocente: 'Instructor', dedicacion: 'Tiempo Convencional', 
     periodoAcademico: `${new Date().getFullYear()}-${new Date().getMonth() < 6 ? 'I' : 'II'}`,
-    semanas: 15, fechaDesde: '', fechaHasta: '', status: 'Por Revisar'
+    semanas: 15, fechaDesde: '', fechaHasta: '', status: 'Por Revisar',
+    sedeCentro: 'Rubio',
+    clave: ''
   });
 
-  const academicPeriods = React.useMemo(() => {
-    const year = new Date().getFullYear();
-    return [
-      `${year}-I`, `${year}-II`,
-      `${year + 1}-I`, `${year + 1}-II`,
-      `${year + 2}-I`, `${year + 2}-II`
-    ];
+  useEffect(() => {
+    getLoginBgConfig().then(cfg => {
+      if (cfg) {
+        if (cfg.bgUrl) setBgImage(cfg.bgUrl);
+        if (cfg.opacity !== undefined) setBgOpacity(cfg.opacity);
+      }
+    });
   }, []);
+
+  // Estado de Mantenimiento Institucional
+  const [maintenanceConfig, setMaintenanceConfig] = useState(() => {
+    try {
+      const cached = localStorage.getItem('upel_maintenance_mode');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    fetch('/api/backup/maintenance-mode')
+      .then(res => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then(data => {
+        if (data.success && data.config) {
+          setMaintenanceConfig(data.config);
+          localStorage.setItem('upel_maintenance_mode', JSON.stringify(data.config));
+        }
+      })
+      .catch(() => {});
+
+    const handleUpdate = (e) => {
+      if (e.detail) {
+        setMaintenanceConfig(e.detail);
+        localStorage.setItem('upel_maintenance_mode', JSON.stringify(e.detail));
+      }
+    };
+    window.addEventListener('upel_maintenance_mode_changed', handleUpdate);
+    return () => window.removeEventListener('upel_maintenance_mode_changed', handleUpdate);
+  }, []);
+
+  useEffect(() => {
+    setIsRegistrationOpen(getRegistrationStatus());
+    getAcademicPeriodsList().then(periods => {
+      const active = (periods || []).find(p => p.estado === 'ACTIVO');
+      if (active) {
+        setFormData(prev => ({
+          ...prev,
+          periodoAcademico: active.nombre
+        }));
+      }
+    }).catch(err => console.error(err));
+  }, []);
+
+  const resetAccessState = () => {
+    setStep(1);
+    setCedulaInput('');
+    setPasswordInput('');
+    setNewPasswordInput('');
+    setConfirmPasswordInput('');
+    setFirstLoginError('');
+    setFichasLapsos([]);
+    setSelectedLapso('');
+  };
 
   const handleValidateCedula = async (e) => {
     e.preventDefault();
@@ -41,41 +141,259 @@ const PublicRegistration = () => {
     
     if (!cedulaInput.trim()) return;
     const inputCed = cedulaInput.trim();
-    const inputNumbers = inputCed.replace(/\D/g, ''); // Extraer solo números
+    const inputNumbers = inputCed.replace(/\D/g, '');
 
-    // 1. Verificar si ya está registrado en la BD de Talento Humano
-    const staffList = await getStaffData();
-    const existingStaff = staffList.find(s => {
-      const dbNumbers = String(s.cedula).replace(/\D/g, '');
-      return dbNumbers === inputNumbers;
-    });
-
-    if (existingStaff) {
-      // Si el docente ya existe pero no ha llenado sus datos personales (ej. teléfono vacío)
-      if (!existingStaff.telefonos) {
-        // Asegurarnos de que los nulls no rompan los inputs controlados
-        const cleanStaff = Object.fromEntries(Object.entries(existingStaff).map(([k, v]) => [k, v === null ? '' : v]));
-        setFormData({
-          ...formData,
-          ...cleanStaff
-        });
-        setStep(2); // Ir al formulario para que complete sus datos
-        return;
-      }
-
-      setRegisteredStaff(existingStaff);
-      setStep(4); // Pantalla de Estado
+    if (!inputNumbers) {
+      setErrorAuth('Por favor ingrese un número de cédula válido.');
       return;
     }
 
-    // 2. Si no está registrado, permitimos que se registre como nuevo
-    // Le pediremos que elija su departamento en el paso 2
-    setFormData({
-      ...formData,
-      cedula: inputCed,
-      department: '' // El usuario deberá seleccionarlo
-    });
-    setStep(2);
+    if (!passwordInput.trim()) {
+      setErrorAuth('Por favor ingrese su contraseña de acceso.');
+      return;
+    }
+
+    let existingStaff = null;
+    let isFirstTime = false;
+
+    try {
+      const res = await fetch('/api/docentes/validar-portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cedula: inputCed, password: passwordInput.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        existingStaff = data.staff;
+        isFirstTime = !!data.isFirstTime;
+        if (data.fichasLapsos && Array.isArray(data.fichasLapsos) && data.fichasLapsos.length > 0) {
+          setFichasLapsos(data.fichasLapsos);
+          const firstValidated = data.fichasLapsos.find(l => l.validadoPorJefe);
+          setSelectedLapso(firstValidated ? firstValidated.periodo : data.fichasLapsos[0].periodo);
+        }
+      } else if (data.message) {
+        setErrorAuth(data.message);
+        return;
+      }
+    } catch {
+      // Fallback local/offline en caso de corte de conexión al servidor
+      const staffList = await getStaffData();
+      existingStaff = staffList.find(s => {
+        const dbNumbers = String(s.cedula).replace(/\D/g, '');
+        return dbNumbers === inputNumbers;
+      });
+
+      if (existingStaff) {
+        const defaultClave = inputNumbers.length >= 4 ? inputNumbers.slice(-4) : inputNumbers;
+        const hasCustomClave = Boolean(existingStaff.clave && String(existingStaff.clave).trim() !== '');
+        const enteredClave = passwordInput.trim();
+
+        if (hasCustomClave) {
+          if (enteredClave !== String(existingStaff.clave).trim()) {
+            setErrorAuth('Contraseña incorrecta. Verifique sus datos e intente nuevamente.');
+            return;
+          }
+        } else {
+          if (enteredClave !== defaultClave) {
+            setErrorAuth('Contraseña incorrecta. Verifique sus datos e intente nuevamente.');
+            return;
+          }
+        }
+        isFirstTime = !hasCustomClave;
+        
+        const activePer = existingStaff.periodoAcademico || '2026-I';
+        const isValid = existingStaff.status === 'Validado' || existingStaff.status === 'Activo';
+        const fallbackList = [
+          {
+            periodo: activePer,
+            status: existingStaff.status || 'Por Revisar',
+            validadoPorJefe: isValid,
+            materias: isValid ? (existingStaff.materias || []) : [],
+            semanas: existingStaff.semanas || 15,
+            department: existingStaff.department,
+            sedeCentro: existingStaff.sedeCentro,
+            categoriaDocente: existingStaff.categoriaDocente,
+            dedicacion: existingStaff.dedicacion,
+            especialidad: existingStaff.especialidad
+          }
+        ];
+        setFichasLapsos(fallbackList);
+        setSelectedLapso(activePer);
+      } else {
+        setErrorAuth('Cédula no encontrada. Su Jefe de Departamento debe registrarlo en el sistema antes de que pueda llenar su ficha.');
+        return;
+      }
+    }
+
+    if (existingStaff) {
+      setValidatingName(`${existingStaff.nombres} ${existingStaff.apellidos}`);
+      setIsValidating(true);
+      
+      setTimeout(() => {
+        setIsValidating(false);
+        setRegisteredStaff(existingStaff);
+
+        if (isFirstTime) {
+          setNewPasswordInput('');
+          setConfirmPasswordInput('');
+          setFirstLoginError('');
+          setStep(6);
+        } else if (!isExpedienteCompleto(existingStaff)) {
+          const cleanStaff = Object.fromEntries(Object.entries(existingStaff).map(([k, v]) => [k, v === null ? '' : v]));
+          setFormData({
+            ...formData,
+            ...cleanStaff
+          });
+          setStep(2);
+        } else {
+          setStep(4);
+        }
+      }, 1800);
+      return;
+    }
+
+    setErrorAuth('Cédula no encontrada. Su Jefe de Departamento debe registrarlo en el sistema antes de que pueda llenar su ficha.');
+  };
+
+  const handleFirstLoginPasswordChange = async (e) => {
+    e.preventDefault();
+    setFirstLoginError('');
+
+    if (!newPasswordInput || newPasswordInput.trim().length < 4) {
+      setFirstLoginError('La nueva contraseña debe tener al menos 4 caracteres.');
+      return;
+    }
+
+    if (newPasswordInput.trim() !== confirmPasswordInput.trim()) {
+      setFirstLoginError('Las contraseñas no coinciden. Por favor verifíquelas.');
+      return;
+    }
+
+    const cleanPass = newPasswordInput.trim();
+    try {
+      const res = await fetch('/api/docentes/cambiar-clave-portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cedula: registeredStaff.cedula, newPassword: cleanPass })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setFirstLoginError(data.message || 'No se pudo actualizar la contraseña en el servidor. Intente nuevamente.');
+        return;
+      }
+    } catch (netErr) {
+      console.warn('Servidor no alcanzable de inmediato, persistiendo clave local:', netErr.message);
+    }
+
+    const updated = {
+      ...registeredStaff,
+      clave: cleanPass
+    };
+
+    await createStaff(updated);
+    setRegisteredStaff(updated);
+
+    if (!isExpedienteCompleto(updated)) {
+      const cleanStaff = Object.fromEntries(Object.entries(updated).map(([k, v]) => [k, v === null ? '' : v]));
+      setFormData({
+        ...formData,
+        ...cleanStaff
+      });
+      setStep(2);
+    } else {
+      setStep(4);
+    }
+  };
+
+  const handleSkipPasswordChange = () => {
+    if (!isExpedienteCompleto(registeredStaff)) {
+      const cleanStaff = Object.fromEntries(Object.entries(registeredStaff).map(([k, v]) => [k, v === null ? '' : v]));
+      setFormData({
+        ...formData,
+        ...cleanStaff
+      });
+      setStep(2);
+    } else {
+      setStep(4);
+    }
+  };
+
+  const handleRecoverPassword = async (e) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotSuccess('');
+
+    const inputCed = forgotCedula.trim().replace(/\D/g, '');
+    const inputMail = forgotEmail.trim().toLowerCase();
+
+    if (!inputCed) {
+      setForgotError('Por favor ingrese su número de cédula.');
+      return;
+    }
+    if (!inputMail) {
+      setForgotError('Por favor ingrese su correo electrónico registrado.');
+      return;
+    }
+
+    setIsForgotLoading(true);
+    try {
+      const res = await fetch('/api/docentes/recuperar-clave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cedula: inputCed, email: inputMail })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsForgotLoading(false);
+        setForgotSuccess(data.message);
+        return;
+      } else if (data.message && res.ok) {
+        setIsForgotLoading(false);
+        setForgotError(data.message);
+        return;
+      }
+    } catch {
+      // Fallback local
+    }
+
+    try {
+      const staffList = await getStaffData();
+      const staff = staffList.find(s => String(s.cedula).replace(/\D/g, '') === inputCed);
+
+      if (!staff) {
+        setIsForgotLoading(false);
+        setForgotError('Cédula no encontrada en el sistema.');
+        return;
+      }
+
+      const personalEmail = (staff.correo || '').trim().toLowerCase();
+      const instEmail = (staff.correoInstitucional || '').trim().toLowerCase();
+
+      if (!personalEmail && !instEmail) {
+        setIsForgotLoading(false);
+        setForgotError('Su ficha no tiene un correo electrónico registrado. Por favor comuníquese con la Subdirección de Docencia o su Jefe de Departamento para restablecer su acceso.');
+        return;
+      }
+
+      if (inputMail !== personalEmail && inputMail !== instEmail) {
+        setIsForgotLoading(false);
+        setForgotError('El correo ingresado no coincide con el registrado en su ficha.');
+        return;
+      }
+
+      const updated = {
+        ...staff,
+        clave: ''
+      };
+      await createStaff(updated);
+
+      const default4 = inputCed.length >= 4 ? inputCed.slice(-4) : inputCed;
+      setIsForgotLoading(false);
+      setForgotSuccess(`¡Identidad verificada exitosamente! Su contraseña ha sido restablecida a los últimos 4 dígitos de su cédula (${default4}). Ahora puede ingresar al portal y el sistema le solicitará configurar su nueva contraseña.`);
+    } catch {
+      setIsForgotLoading(false);
+      setForgotError('Ocurrió un error al procesar la solicitud. Intente nuevamente.');
+    }
   };
 
   const handleInputChange = (e) => {
@@ -92,6 +410,17 @@ const PublicRegistration = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (formStep === 1 && (!formData.department || formData.department.trim() === '')) {
+      alert('Por favor seleccione al menos un departamento académico al que pertenece.');
+      return;
+    }
+
+    if (formStep < 4) {
+      setFormStep(formStep + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
 
     // Validación de RIF
     const rifRegex = /^[VEJGvejg]-\d{7,9}-?\d?$/i;
@@ -125,360 +454,272 @@ const PublicRegistration = () => {
     const existingIndex = staffList.findIndex(s => s.cedula === formData.cedula);
 
     if (existingIndex >= 0) {
-      // Actualizar registro existente (ej. pre-cargado)
       const updatedStaff = { ...staffList[existingIndex], ...formData };
-      
-      // Preservar materias o estatus si el Jefe ya las había asignado
       updatedStaff.materias = staffList[existingIndex].materias || [];
-      // Si ya estaba Activo (validado por el jefe), mantenerlo Activo. 
-      // Si no, pasa de "Por Revisar" a "Por Revisar" (se mantiene igual).
+      if (staffList[existingIndex].department) {
+        updatedStaff.department = staffList[existingIndex].department;
+      }
+      if (staffList[existingIndex].sedeCentro) {
+        updatedStaff.sedeCentro = staffList[existingIndex].sedeCentro;
+      }
+      if (staffList[existingIndex].periodoAcademico) {
+        updatedStaff.periodoAcademico = staffList[existingIndex].periodoAcademico;
+      }
       updatedStaff.status = staffList[existingIndex].status === 'Activo' ? 'Activo' : 'Por Revisar';
       
+      try {
+        await fetch('/api/docentes/portal-actualizar-ficha', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedStaff)
+        });
+      } catch (err) {
+        console.warn('Error al sincronizar ficha con el backend:', err);
+      }
+
       await createStaff(updatedStaff);
     } else {
-      // Guardar nuevo en la base de datos simulada
       const newStaff = {
         ...formData,
         materias: [],
+        status: 'Por Revisar',
         id: Date.now().toString()
       };
+      try {
+        await fetch('/api/docentes/portal-actualizar-ficha', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newStaff)
+        });
+      } catch (err) {
+        console.warn('Error al registrar nuevo docente en backend:', err);
+      }
       await createStaff(newStaff);
     }
-    
-    // Ya no se requiere remover de autorizados porque se eliminó esa función
-
 
     setStep(3);
   };
 
-  if (step === 3) {
+  // BLOQUEO ESTRICTO POR MODO MANTENIMIENTO
+  if (maintenanceConfig?.enabled && maintenanceConfig?.strictLockout) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'url("/fondo.png") no-repeat center center fixed', backgroundSize: 'cover' }}>
-        <div className="surface animate-fade-in" style={{ padding: '3rem', textAlign: 'center', maxWidth: '500px', width: '90%' }}>
-          <CheckCircle size={64} style={{ color: 'var(--success)', margin: '0 auto 1.5rem auto' }} />
-          <h2 style={{ marginBottom: '1rem' }}>¡Registro Exitoso!</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
-            Tus datos han sido enviados correctamente a la Unidad de Talento Humano del departamento de <strong>{formData.department}</strong>.
-            El Jefe de Departamento validará tu información y completará tu Oferta Académica.
-          </p>
-          <button className="btn btn-primary" onClick={() => {
-            setStep(1);
-            setCedulaInput('');
-            setFormData({...formData, cedula: '', nombres: '', apellidos: ''});
-          }}>Finalizar</button>
-        </div>
-      </div>
+      <MaintenanceLockscreen 
+        config={maintenanceConfig}
+        onRefresh={async () => {
+          try {
+            const res = await fetch('/api/backup/maintenance-mode');
+            const data = await res.json();
+            if (data.success && data.config) {
+              setMaintenanceConfig(data.config);
+              localStorage.setItem('upel_maintenance_mode', JSON.stringify(data.config));
+              if (!data.config.enabled || !data.config.strictLockout) {
+                window.location.reload();
+              }
+            }
+          } catch (e) {
+            window.location.reload();
+          }
+        }}
+      />
     );
   }
 
-  // Vista de Impresión para el Docente
+  // Paso 3: Pantalla de Registro Exitoso
+  if (step === 3) {
+    return (
+      <RegistrationSuccessCard 
+        department={formData.department}
+        onFinish={() => {
+          setStep(1);
+          setCedulaInput('');
+          setPasswordInput('');
+          setNewPasswordInput('');
+          setConfirmPasswordInput('');
+          setFirstLoginError('');
+          setFormData({...formData, cedula: '', nombres: '', apellidos: '', clave: ''});
+        }}
+      />
+    );
+  }
+
+  // Paso 5: Vista de Impresión para el Docente
   if (step === 5 && registeredStaff) {
     return <PrintableFicha staff={registeredStaff} onBack={() => setStep(4)} />;
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'url("/fondo.png") no-repeat center center fixed', backgroundSize: 'cover', padding: '2rem 1rem' }}>
-      <div className="surface animate-fade-in" style={{ maxWidth: '1100px', margin: '0 auto', padding: '2.5rem' }}>
-        
-        <div style={{ position: 'relative', textAlign: 'center', marginBottom: '3rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '2rem' }}>
-          <a href="/login" style={{ position: 'absolute', top: 0, right: 0, textDecoration: 'none', color: 'var(--text-muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-app)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
-            Acceso Administrativo
-          </a>
-          <img src="/logo.jpg" alt="Logo UPEL" style={{ height: '70px', marginBottom: '1rem' }} />
-          <div style={{ fontWeight: '600', fontSize: '1.1rem', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            República Bolivariana de Venezuela
-          </div>
-          <h1 style={{ color: 'var(--primary)', marginBottom: '0.5rem', fontSize: '2.5rem' }}>UPEL - IPRGR</h1>
-          <h2>Unidad de Talento Humano</h2>
-          <p className="subtitle">Formulario de Actualización de Datos del Docente Contratado</p>
-        </div>
+    <div style={{ 
+      minHeight: '100vh', 
+      width: '100%', 
+      display: 'flex', 
+      flexDirection: 'column',
+      background: `linear-gradient(135deg, rgba(0, 32, 77, ${bgOpacity}) 0%, rgba(10, 25, 47, ${Math.min(Number(bgOpacity) + 0.15, 0.95)}) 100%), url("${bgImage}") center/cover no-repeat fixed`,
+      fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif',
+      position: 'relative'
+    }}>
+      {/* Botones Flotantes del Lateral Izquierdo Oficiales UPEL */}
+      <RegistrationFloatingMenu />
 
-        {/* SI EL REGISTRO ESTÁ CERRADO */}
+      {/* Barra Principal Oficial UPEL (#masthead) */}
+      <RegistrationHeader />
+
+      {/* Contenedor Principal */}
+      <main style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: step === 1 ? 'center' : 'flex-start',
+        padding: step === 1 ? '2rem 1rem 3.5rem' : '1.5rem 1rem 3rem',
+        width: '100%',
+        position: 'relative'
+      }}>
+        {/* Banner si el registro está cerrado */}
         {!isRegistrationOpen && (
-          <div style={{ maxWidth: '500px', margin: '0 auto', padding: '3rem 2rem', background: 'var(--danger-bg)', borderRadius: 'var(--radius)', border: '1px solid var(--danger)', textAlign: 'center' }}>
-            <ShieldAlert size={64} style={{ color: 'var(--danger)', margin: '0 auto 1.5rem auto' }} />
-            <h3 style={{ color: 'var(--danger)', marginBottom: '1rem' }}>Registro Cerrado Temporalmente</h3>
-            <p style={{ color: 'var(--danger)', fontWeight: 500 }}>
-              Por motivos de seguridad y confiabilidad de datos, el administrador ha deshabilitado el portal de registro público.
+          <div style={{ maxWidth: '500px', margin: '2rem auto', padding: '2.5rem 2rem', background: '#ffffff', borderRadius: '16px', border: '1px solid #fecaca', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', textAlign: 'center' }}>
+            <ShieldAlert size={56} style={{ color: '#dc2626', margin: '0 auto 1.2rem auto' }} />
+            <h3 style={{ color: '#991b1b', marginBottom: '0.75rem', fontSize: '18px', fontWeight: 800 }}>Registro Cerrado Temporalmente</h3>
+            <p style={{ color: '#475569', fontSize: '13.5px', lineHeight: '1.5' }}>
+              Por motivos de seguridad y auditoría de datos, la Subdirección de Docencia ha restringido temporalmente las actualizaciones de ficha.
             </p>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '1.5rem' }}>
-              Comuníquese con la Unidad de Talento Humano si necesita registrar su ficha o validar su información.
+            <p style={{ color: '#64748b', fontSize: '12px', marginTop: '1.2rem' }}>
+              Comuníquese con la Subdirección de Docencia o Jefatura de Departamento si requiere asistencia.
             </p>
           </div>
         )}
 
+        {/* PASO 1: TARJETA INSTITUCIONAL DEL PORTAL DOCENTE */}
         {step === 1 && isRegistrationOpen && (
-          <div style={{ maxWidth: '500px', margin: '0 auto', padding: '2rem', background: 'var(--bg-app)', borderRadius: 'var(--radius)', border: '1px solid var(--border-light)' }}>
-            <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Ingreso al Sistema</h3>
-            <form onSubmit={handleValidateCedula}>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label" style={{ textAlign: 'center' }}>Por favor, ingrese su Cédula de Identidad</label>
-                <input 
-                  required 
-                  type="text" 
-                  value={cedulaInput} 
-                  onChange={(e) => setCedulaInput(e.target.value)} 
-                  className="filter-input w-full" 
-                  style={{ textAlign: 'center', fontSize: '1.2rem', padding: '1rem' }}
-                  placeholder="Ej. V-12345678"
-                  autoFocus
-                />
-                <p className="text-muted" style={{ textAlign: 'center', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                  Use su cédula para registrarse por primera vez o para consultar el estado de su ficha.
-                </p>
-              </div>
-              
-              {errorAuth && (
-                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.9rem' }}>
-                  <ShieldAlert size={20} style={{ flexShrink: 0 }} />
-                  <span>{errorAuth}</span>
-                </div>
-              )}
-
-              <button type="submit" className="btn btn-primary w-full" style={{ padding: '1rem', fontSize: '1.1rem' }}>
-                Continuar
-              </button>
-            </form>
-          </div>
+          <RegistrationAccessCard 
+            cedulaInput={cedulaInput}
+            setCedulaInput={setCedulaInput}
+            passwordInput={passwordInput}
+            setPasswordInput={setPasswordInput}
+            showPassword={showPassword}
+            setShowPassword={setShowPassword}
+            errorAuth={errorAuth}
+            isValidating={isValidating}
+            validatingName={validatingName}
+            handleValidateCedula={handleValidateCedula}
+            setIsForgotModalOpen={setIsForgotModalOpen}
+            setForgotCedula={setForgotCedula}
+            setForgotEmail={setForgotEmail}
+            setForgotError={setForgotError}
+            setForgotSuccess={setForgotSuccess}
+          />
         )}
 
-        {/* --- ESTADO DEL REGISTRO (Paso 4) --- */}
-        {step === 4 && registeredStaff && (
-          <div className="animate-fade-in" style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-            <h3 style={{ marginBottom: '2rem' }}>Estado de su Ficha: {registeredStaff.nombres} {registeredStaff.apellidos}</h3>
-            
-            {registeredStaff.status === 'Por Revisar' ? (
-              <div style={{ padding: '2rem', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 'var(--radius)' }}>
-                <Clock size={48} style={{ color: '#d97706', margin: '0 auto 1rem auto' }} />
-                <h4 style={{ color: '#92400e', marginBottom: '0.5rem' }}>En Proceso de Revisión</h4>
-                <p style={{ color: '#92400e', fontSize: '0.95rem' }}>
-                  Su ficha ha sido recibida por Talento Humano. En este momento, el Jefe del Departamento de <strong>{registeredStaff.department}</strong> debe asignarle su carga académica (Materias). 
-                  <br/><br/>Por favor, vuelva a consultar más tarde.
-                </p>
+        <div className="animate-fade-in" style={{ position: 'relative', zIndex: 10, maxWidth: '1100px', width: '100%', margin: '0 auto', padding: step === 1 ? '0' : '1rem' }}>
+          {step > 1 && (
+            <div style={{ position: 'relative', textAlign: 'center', marginBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.3)', paddingBottom: '1.5rem' }}>
+              <img src="/logo.jpg" alt="Logo UPEL" style={{ height: '70px', marginBottom: '1rem', borderRadius: '50%', boxShadow: '0 4px 16px rgba(0,0,0,0.3)', background: '#ffffff', padding: '3px' }} />
+              <div style={{ fontWeight: '800', fontSize: '1.1rem', marginBottom: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'white', textShadow: '1px 1px 4px rgba(0,0,0,0.6)' }}>
+                República Bolivariana de Venezuela
               </div>
-            ) : (
-              <div style={{ padding: '2rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--radius)' }}>
-                <CheckCircle size={48} style={{ color: '#16a34a', margin: '0 auto 1rem auto' }} />
-                <h4 style={{ color: '#166534', marginBottom: '0.5rem' }}>¡Ficha Validada!</h4>
-                <p style={{ color: '#166534', fontSize: '0.95rem', marginBottom: '1.5rem' }}>
-                  Su carga académica ha sido asignada y su ficha está completamente lista. 
-                  Puede visualizarla o imprimirla en formato PDF para proceder con la firma.
-                </p>
-                <button className="btn btn-primary" style={{ margin: '0 auto' }} onClick={() => setStep(5)}>
-                  <Printer size={18} /> Ver e Imprimir Ficha
-                </button>
-              </div>
-            )}
-
-            <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <button className="btn btn-primary" onClick={() => {
-                const cleanStaff = Object.fromEntries(Object.entries(registeredStaff).map(([k, v]) => [k, v === null ? '' : v]));
-                setFormData({ ...formData, ...cleanStaff });
-                setStep(2);
-              }}>
-                Actualizar mis Datos
-              </button>
-              <button className="btn btn-outline" onClick={() => { setStep(1); setCedulaInput(''); }}>
-                Volver al Inicio
-              </button>
+              <h1 style={{ color: 'white', marginBottom: '0.3rem', fontSize: '2.4rem', textShadow: '2px 2px 6px rgba(0,0,0,0.6)' }}>UPEL - IPRGR</h1>
+              <h2 style={{ color: 'rgba(255,255,255,0.95)', textShadow: '1px 1px 4px rgba(0,0,0,0.6)', fontSize: '1.4rem' }}>Subdirección de Docencia</h2>
+              <p className="subtitle" style={{ color: 'white', textShadow: '1px 1px 4px rgba(0,0,0,0.6)', fontSize: '1rem' }}>Actualización de Datos del Docente Contratado</p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* --- FORMULARIO DE REGISTRO (Paso 2) --- */}
-        {step === 2 && (
-          <form onSubmit={handleSubmit} className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-            
-            <div style={{ background: '#dcfce7', color: '#166534', padding: '1rem', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontWeight: 500 }}>
-              Por favor complete o actualice su información.
-            </div>
+          {/* PASO 6: PRIMER INGRESO - CAMBIO DE CONTRASEÑA */}
+          {step === 6 && registeredStaff && (
+            <RegistrationFirstLoginModal 
+              registeredStaff={registeredStaff}
+              showNewPass={showNewPass}
+              setShowNewPass={setShowNewPass}
+              newPasswordInput={newPasswordInput}
+              setNewPasswordInput={setNewPasswordInput}
+              confirmPasswordInput={confirmPasswordInput}
+              setConfirmPasswordInput={setConfirmPasswordInput}
+              firstLoginError={firstLoginError}
+              handleFirstLoginPasswordChange={handleFirstLoginPasswordChange}
+              handleSkipPasswordChange={handleSkipPasswordChange}
+            />
+          )}
 
-            {/* Información del Departamento y Periodo */}
-            <section>
-               <div style={{ background: 'var(--primary-light)', padding: '1.5rem', borderRadius: 'var(--radius)', border: '1px solid rgba(0,0,0,0.05)', textAlign: 'center' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', maxWidth: '600px', margin: '0 auto' }}>
-                    <div>
-                      <label className="form-label" style={{ color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Departamento Académico al que pertenece</label>
-                      {formData.department ? (
-                        <input 
-                          type="text"
-                          readOnly
-                          value={formData.department}
-                          className="filter-input w-full"
-                          style={{ fontSize: '1.1rem', padding: '0.8rem', background: '#f1f5f9', cursor: 'not-allowed', color: '#64748b', border: '1px solid #cbd5e1' }}
-                        />
-                      ) : (
-                        <select 
-                          required 
-                          name="department" 
-                          value={formData.department} 
-                          onChange={handleInputChange} 
-                          className="filter-select w-full"
-                          style={{ fontSize: '1.1rem', padding: '0.8rem', background: 'white' }}
-                        >
-                          <option value="">Seleccione su departamento...</option>
-                          <option value="Matemáticas">Matemáticas</option>
-                          <option value="Pedagogía">Pedagogía</option>
-                          <option value="Agroindustrial">Agroindustrial</option>
-                          <option value="Ciencias Sociales">Ciencias Sociales</option>
-                        </select>
-                      )}
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>Período Académico</label>
-                      <input 
-                        type="text"
-                        readOnly
-                        value={formData.periodoAcademico}
-                        className="filter-input w-full"
-                        style={{ fontSize: '1.1rem', padding: '0.8rem', background: '#f1f5f9', cursor: 'not-allowed', color: '#64748b', border: '1px solid #cbd5e1' }}
-                      />
-                    </div>
-                  </div>
-               </div>
-            </section>
+          {/* PASO 4: ESTADO DEL REGISTRO */}
+          {step === 4 && registeredStaff && (
+            <RegistrationStatusView 
+              registeredStaff={registeredStaff}
+              setRegisteredStaff={setRegisteredStaff}
+              fichasLapsos={fichasLapsos}
+              selectedLapso={selectedLapso}
+              setSelectedLapso={setSelectedLapso}
+              setFormData={setFormData}
+              formData={formData}
+              setFormStep={setFormStep}
+              setStep={setStep}
+              isSendFichaModalOpen={isSendFichaModalOpen}
+              setIsSendFichaModalOpen={setIsSendFichaModalOpen}
+              resetAccessState={resetAccessState}
+            />
+          )}
 
-            {/* Datos Personales */}
-            <section style={{ background: 'var(--surface)', padding: '2rem', borderRadius: 'var(--radius)', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
-              <h3 style={{ borderBottom: '2px solid var(--primary-light)', paddingBottom: '0.75rem', marginBottom: '2rem', color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                👤 DATOS PERSONALES
-              </h3>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
-                {/* Fila 1 */}
-                <div>
-                  <label className="form-label">Apellidos</label>
-                  <input required type="text" name="apellidos" value={formData.apellidos} onChange={handleInputChange} className="filter-input w-full" />
-                </div>
-                <div>
-                  <label className="form-label">Nombres</label>
-                  <input required type="text" name="nombres" value={formData.nombres} onChange={handleInputChange} className="filter-input w-full" />
-                </div>
-
-                {/* Fila 2 */}
-                <div>
-                  <label className="form-label">Cédula de Identidad</label>
-                  <input required type="text" readOnly name="cedula" value={formData.cedula} className="filter-input w-full" style={{ background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed', border: '1px solid #cbd5e1' }} />
-                </div>
-                <div>
-                  <label className="form-label">Fecha de Nacimiento</label>
-                  <input required type="date" name="fechaNac" value={formData.fechaNac} onChange={handleInputChange} className="filter-input w-full" />
-                </div>
-
-                {/* Fila 3 */}
-                <div>
-                  <label className="form-label">RIF</label>
-                  <input required type="text" name="rif" value={formData.rif} onChange={handleInputChange} className="filter-input w-full" placeholder="Ej. V-12345678-9" />
-                </div>
-                <div>
-                  <label className="form-label">Correo Electrónico</label>
-                  <input required type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="filter-input w-full" placeholder="Ej. docente@correo.com" />
-                </div>
-                <div>
-                  <label className="form-label">Teléfonos</label>
-                  <input required type="text" name="telefonos" value={formData.telefonos} onChange={handleInputChange} className="filter-input w-full" placeholder="Ej. 0414-1234567" />
-                </div>
-
-                {/* Fila 4 (Ancha) */}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="form-label">Dirección de Habitación</label>
-                  <input required type="text" name="direccion" value={formData.direccion} onChange={handleInputChange} className="filter-input w-full" />
-                </div>
-              </div>
-
-              <h4 style={{ marginTop: '2.5rem', marginBottom: '1.5rem', color: 'var(--primary)', fontSize: '1.1rem' }}>Información Bancaria</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', background: '#f8fafc', padding: '1.5rem', borderRadius: 'var(--radius)', border: '1px solid #e2e8f0' }}>
-                <div>
-                  <label className="form-label">Banco</label>
-                  <select name="banco" value={formData.banco} onChange={handleInputChange} className="filter-select w-full" required>
-                    <option value="">Seleccione un banco...</option>
-                    <option value="Banco de Venezuela">Banco de Venezuela</option>
-                    <option value="Banesco">Banesco</option>
-                    <option value="Banco Mercantil">Banco Mercantil</option>
-                    <option value="BBVA Provincial">BBVA Provincial</option>
-                    <option value="Banco Nacional de Crédito (BNC)">Banco Nacional de Crédito (BNC)</option>
-                    <option value="Bancaribe">Bancaribe</option>
-                    <option value="Banco Exterior">Banco Exterior</option>
-                    <option value="Banco del Tesoro">Banco del Tesoro</option>
-                    <option value="Bancamiga">Bancamiga</option>
-                    <option value="Banplus">Banplus</option>
-                    <option value="Banco Plaza">Banco Plaza</option>
-                    <option value="100% Banco">100% Banco</option>
-                    <option value="Banco Fondo Común (BFC)">Banco Fondo Común (BFC)</option>
-                    <option value="Banco Activo">Banco Activo</option>
-                    <option value="Banco Caroní">Banco Caroní</option>
-                    <option value="Banco Sofitasa">Banco Sofitasa</option>
-                    <option value="Banco Digital de los Trabajadores">Banco Digital de los Trabajadores</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="form-label">Tipo Cuenta</label>
-                  <select name="tipoCuenta" value={formData.tipoCuenta} onChange={handleInputChange} className="filter-select w-full">
-                    <option value="Ahorro">Ahorro</option>
-                    <option value="Corriente">Corriente</option>
-                  </select>
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="form-label">Nro. de Cuenta Bancaria</label>
-                  <input required type="text" name="cuentaBancaria" value={formData.cuentaBancaria} onChange={handleInputChange} className="filter-input w-full" maxLength="20" placeholder="Ingrese los 20 dígitos de su cuenta" style={{ letterSpacing: '2px', fontFamily: 'monospace', fontSize: '1.1rem' }} />
-                </div>
-              </div>
-            </section>
-
-            {/* Datos Académicos */}
-            <section style={{ background: 'var(--surface)', padding: '2rem', borderRadius: 'var(--radius)', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
-              <h3 style={{ borderBottom: '2px solid var(--primary-light)', paddingBottom: '0.75rem', marginBottom: '2rem', color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                🎓 PERFIL ACADÉMICO
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="form-label">Títulos de Pregrado</label>
-                  <input required type="text" name="titulosPregrado" value={formData.titulosPregrado} onChange={handleInputChange} className="filter-input w-full" placeholder="Ej. Lcdo. en Educación Mención Matemáticas" />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="form-label">Títulos de Postgrado</label>
-                  <input type="text" name="titulosPostgrado" value={formData.titulosPostgrado || ''} onChange={handleInputChange} className="filter-input w-full" placeholder="Si no posee, deje en blanco" />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="form-label">Doctorado</label>
-                  <input type="text" name="doctorado" value={formData.doctorado || ''} onChange={handleInputChange} className="filter-input w-full" placeholder="Si no posee, deje en blanco" />
-                </div>
-                <div>
-                  <label className="form-label">Categoría Docente</label>
-                  <input required type="text" name="categoriaDocente" value={formData.categoriaDocente} onChange={handleInputChange} className="filter-input w-full" placeholder="Ej. INSTRUCTOR" />
-                </div>
-                <div>
-                  <label className="form-label">Dedicación</label>
-                  <input required type="text" name="dedicacion" value={formData.dedicacion} onChange={handleInputChange} className="filter-input w-full" placeholder="Ej. TIEMPO CONVENCIONAL" />
-                </div>
-              </div>
-            </section>
-
-            <div style={{ padding: '2rem', background: '#f8fafc', border: '1px dashed var(--border-light)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
-              <p style={{ margin: 0, color: 'var(--text-muted)' }}>
-                <em>Nota: La asignación de materias (Oferta Académica) será validada por el Jefe de Departamento. Podrás imprimir tu ficha luego de la validación.</em>
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', gap: '1rem' }}>
-              <button type="button" className="btn btn-outline" onClick={() => setStep(1)}>
-                Atrás
-              </button>
-              <button type="submit" className="btn btn-primary" style={{ padding: '1rem 3rem', fontSize: '1.1rem' }}>
-                Enviar Mis Datos
-              </button>
-            </div>
-            
-          </form>
-        )}
-
-      </div>
+          {/* PASO 2: FORMULARIO WIZARD */}
+          {step === 2 && (
+            <RegistrationWizard 
+              formStep={formStep}
+              setFormStep={setFormStep}
+              formData={formData}
+              setFormData={setFormData}
+              handleInputChange={handleInputChange}
+              handleSubmit={handleSubmit}
+              registeredStaff={registeredStaff}
+              setStep={setStep}
+              setCedulaInput={setCedulaInput}
+            />
+          )}
+        </div>
+      </main>
       
-      <Footer />
-      
+      {/* Pie de Página Oficial UPEL */}
+      <RegistrationFooter />
+
+      {/* Modal: Recuperación de Contraseña */}
+      <RegistrationForgotPassModal 
+        isOpen={isForgotModalOpen}
+        onClose={() => { setIsForgotModalOpen(false); setForgotSuccess(''); setForgotError(''); }}
+        forgotCedula={forgotCedula}
+        setForgotCedula={setForgotCedula}
+        forgotEmail={forgotEmail}
+        setForgotEmail={setForgotEmail}
+        forgotError={forgotError}
+        setForgotError={setForgotError}
+        forgotSuccess={forgotSuccess}
+        setForgotSuccess={setForgotSuccess}
+        isForgotLoading={isForgotLoading}
+        handleRecoverPassword={handleRecoverPassword}
+        setCedulaInput={setCedulaInput}
+        setPasswordInput={setPasswordInput}
+      />
+
       <style>{`
         .w-full { width: 100%; }
-        .form-label { display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+        .form-label { display: block; margin-bottom: 0.45rem; font-size: 13px; font-weight: 600; color: #1e293b; }
+        .w11-input, .w11-select {
+          width: 100%; padding: 11px 14px; background: #ffffff; border: 1.5px solid #cbd5e1;
+          border-radius: 8px; font-size: 14.5px; color: #0f172a; outline: none; transition: all 0.2s;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03); font-weight: 500;
+        }
+        .w11-input:focus, .w11-select:focus { 
+          border-color: #0047bb; 
+          box-shadow: 0 0 0 3px rgba(0, 71, 187, 0.15); 
+          background: #ffffff; 
+        }
+        .w11-btn {
+          background: #0047bb; color: #ffffff; border: none; padding: 11px 26px;
+          border-radius: 8px; font-size: 14.5px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(0, 71, 187, 0.25);
+        }
+        .w11-btn:hover { background: #00368b; transform: translateY(-1px); }
+        .w11-btn:active { transform: translateY(0); }
+        .w11-btn-outline {
+          background: #f8fafc; color: #334155; border: 1.5px solid #cbd5e1; padding: 11px 26px;
+          border-radius: 8px; font-size: 14.5px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+        }
+        .w11-btn-outline:hover { background: #e2e8f0; color: #0f172a; }
+        option { color: #0f172a; background: #ffffff; }
       `}</style>
     </div>
   );

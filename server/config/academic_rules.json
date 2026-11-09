@@ -1,0 +1,31 @@
+{
+  "institution": "Universidad Pedagógica Experimental Libertador",
+  "institute": "Instituto Pedagógico Rural Gervasio Rubio",
+  "version": "2026.1",
+  "semanasPorLapso": 15,
+  "topesHorarios": {
+    "TIEMPO_COMPLETO": 36,
+    "DEDICACION_EXCLUSIVA": 40,
+    "MEDIO_TIEMPO": 18,
+    "TIEMPO_CONVENCIONAL": 12
+  },
+  "sedesOficiales": [
+    "Rubio",
+    "Sabana de Mendoza",
+    "Encontrados"
+  ],
+  "departamentosOficiales": [
+    "Pedagogía",
+    "Matemática",
+    "Ciencias Sociales",
+    "Educación Física",
+    "Agroindustrial",
+    "Idiomas Modernos",
+    "Biología y Química"
+  ],
+  "bancoNacional": {
+    "codigo": "0102",
+    "nombre": "Banco de Venezuela",
+    "longitudCuenta": 20
+  }
+}

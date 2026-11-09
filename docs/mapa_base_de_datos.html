@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diagrama de Base de Datos - UPEL SIGOA</title>
+  <!-- Biblioteca Mermaid oficial -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 2rem;
+      background-color: #0b132b;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    h1 {
+      margin-bottom: 0.5rem;
+      color: #38bdf8;
+      text-align: center;
+    }
+    p {
+      color: #94a3b8;
+      margin-top: 0;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .diagram-container {
+      background: #1c2541;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      max-width: 1200px;
+      width: 100%;
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Arquitectura y Flujo de la Base de Datos</h1>
+  <p>UPEL SIGOA · Base de Datos: <strong>upel_talento_humano</strong></p>
+
+  <div class="diagram-container">
+    <pre class="mermaid">
+flowchart TD
+    %% 1. USUARIOS
+    subgraph S1 ["1. USUARIOS Y PANTALLAS"]
+        U1["💻 Panel Administrativo (React 19)"]
+        U2["📝 Registro Docente (Autoservicio)"]
+        U3["📊 Reportes (Excel 5 hojas / PDF QR / TXT Banco)"]
+    end
+
+    %% 2. BACKEND
+    subgraph S2 ["2. SERVIDOR BACKEND (Node.js Express)"]
+        B1["🚀 API REST: /api/docentes, /api/cargas"]
+        B2["🛡️ Seguridad JWT + Roles (ADMIN, JEFE, AUDITOR)"]
+        B3["⚡ Pool MySQL (75 conexiones con Keep-Alive)"]
+        B4["🔄 Interceptor Write-Through 3NF"]
+    end
+
+    %% 3. VISTAS RAPIDAS
+    subgraph S3 ["3. CONSULTAS VELOCES (Vistas SQL a 0ms)"]
+        V1["👁️ VISTA 'docentes'<br>127 docentes con todo su perfil"]
+        V2["👁️ VISTA 'docentes_materias'<br>280 cargas con sección y cupos"]
+    end
+
+    %% 4. BASE DE DATOS FISICA
+    subgraph S4 ["4. BASE DE DATOS FÍSICA (Tercera Forma Normal)"]
+        T1[("👤 docentes_v3<br>Cédula, Nombres, Correo")]
+        T2[("📄 docentes_contrataciones_v3<br>Categoría, Dedicación, Horas")]
+        T3[("🏦 docentes_datos_bancarios_v3<br>Cuenta Banco Venezuela 20 dígitos")]
+        T4[("📚 cargas_academicas_v3<br>Materias por docente y sección")]
+        T5[("📖 materias_catalogo_v3<br>233 Asignaturas institucionales")]
+        T6[("🏛️ departamentos_v3 & sedes_v3<br>4 Dptos y 3 Sedes")]
+        T7[("🗓️ periodos_academicos_v3<br>Lapsos 2026-I y 2026-II")]
+        T8[("📜 cargas_historicas<br>Kardex docente inmutable")]
+    end
+
+    %% 5. SEGURIDAD
+    subgraph S5 ["5. SEGURIDAD Y BITÁCORA"]
+        SEC1[("🔐 usuarios<br>7 cuentas con clave Bcrypt")]
+        SEC2[("📝 audit_logs<br>Registro de cada acción con IP y fecha")]
+    end
+
+    %% CONEXIONES
+    S1 -->|Envía peticiones| S2
+    B4 -.->|"Lee rápido"| S3
+    S3 --> T1
+    S3 --> T2
+    S3 --> T3
+    S3 --> T4
+
+    B4 ===>|"Guarda sin duplicar"| T1
+    B4 ===> T2
+    B4 ===> T3
+    B4 ===> T4
+
+    T5 --- T4
+    T6 --- T1
+    T7 --- T4
+    T7 --- T8
+
+    B2 -.-> SEC1
+    B4 -.-> SEC2
+    </pre>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#1c2541',
+        primaryColor: '#0284c7',
+        primaryTextColor: '#ffffff',
+        primaryBorderColor: '#38bdf8',
+        lineColor: '#fbbf24',
+        secondaryColor: '#059669',
+        tertiaryColor: '#4f46e5'
+      }
+    });
+  </script>
+</body>
+</html>

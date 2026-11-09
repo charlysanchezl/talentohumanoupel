@@ -1,9 +1,48 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
-import { Search, Eye, FileText, CheckCircle, Clock, X, Plus, CheckSquare, Settings, Calculator, Globe, GraduationCap, Microscope, User, Printer, Upload } from 'lucide-react';
-import PrintableFicha from './PrintableFicha';
-import { getStaffData, getCurrentUser, createStaff, updateStaffCarga, getCatalogoMaterias, addMateriaCatalogo } from '../data';
-import * as XLSX from 'xlsx-js-style';
+import { Calculator, GraduationCap, Globe, TreePine, BookOpen } from 'lucide-react';
+import { 
+  getStaffData, 
+  getCurrentUser, 
+  createStaff, 
+  deleteStaff, 
+  updateStaffCarga, 
+  getCatalogoMaterias, 
+  addMateriaCatalogo, 
+  matchDepartment, 
+  normalizeDepartmentName, 
+  getInstitutionalHeaderSubtitle, 
+  getAcademicPeriodsList, 
+  isExpedienteCompleto, 
+  getMissingExpedienteFields 
+} from '../data';
+import { matchesSearch } from '../utils/searchHelper';
+import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
+import { formatFechaEspanol } from '../utils/staffExcelExportHelper';
+
+// Subcomponentes modulares de Staff
+import StaffHeader from './staff/StaffHeader';
+import StaffToolbar from './staff/StaffToolbar';
+import StaffTable from './staff/StaffTable';
+import StaffOfertaTable from './staff/StaffOfertaTable';
+import { LISTA_BANCOS, CATEGORIAS_DOCENTE, DEDICACIONES_DOCENTE } from './staff/StaffEditModal';
+import StaffActionMenuPortal from './staff/StaffActionMenuPortal';
+
+// Modales con carga bajo demanda (Code Splitting y Lazy Loading)
+const StaffEditModal = lazy(() => import('./staff/StaffEditModal'));
+const StaffDetailModal = lazy(() => import('./staff/StaffDetailModal'));
+const StaffCreateModal = lazy(() => import('./staff/StaffCreateModal'));
+const StaffValidateModal = lazy(() => import('./staff/StaffValidateModal'));
+const PrintableFicha = lazy(() => import('./PrintableFicha'));
+const ExcelPreviewModal = lazy(() => import('./ExcelPreviewModal'));
+const NotificationModal = lazy(() => import('./NotificationModal'));
+const SendFichaEmailModal = lazy(() => import('./SendFichaEmailModal'));
+const ReplicatePeriodModal = lazy(() => import('./ReplicatePeriodModal'));
+const TeacherHistoryModal = lazy(() => import('./TeacherHistoryModal'));
+const PeriodManagementModal = lazy(() => import('./PeriodManagementModal'));
+
+// Re-export constants for backward compatibility
+export { LISTA_BANCOS, CATEGORIAS_DOCENTE, DEDICACIONES_DOCENTE };
 
 function useDebounce(value, delay) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -15,13 +54,12 @@ function useDebounce(value, delay) {
 }
 
 const getDeptTheme = (dept) => {
-  switch (dept) {
-    case 'Matemáticas': return { color: '#3b82f6', bg: '#eff6ff', icon: <Calculator size={32} /> };
-    case 'Ciencias Sociales': return { color: '#8b5cf6', bg: '#ede9fe', icon: <Globe size={32} /> };
-    case 'Pedagogía': return { color: '#ec4899', bg: '#fce7f3', icon: <GraduationCap size={32} /> };
-    case 'Agroindustrial': return { color: '#10b981', bg: '#d1fae5', icon: <Microscope size={32} /> };
-    default: return { color: 'var(--primary)', bg: 'var(--primary-light)', icon: <User size={32} /> };
-  }
+  const d = (dept || '').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (d.includes('MATEMATICA')) return { color: '#3b82f6', bg: '#eff6ff', icon: <Calculator size={32} /> };
+  if (d.includes('PEDAGOGIA')) return { color: '#10b981', bg: '#ecfdf5', icon: <GraduationCap size={32} /> };
+  if (d.includes('SOCIALES')) return { color: '#f59e0b', bg: '#fffbeb', icon: <Globe size={32} /> };
+  if (d.includes('AGRO')) return { color: '#84cc16', bg: '#f7fee7', icon: <TreePine size={32} /> };
+  return { color: 'var(--primary)', bg: 'var(--primary-light)', icon: <BookOpen size={32} /> };
 };
 
 const StaffList = () => {
@@ -30,16 +68,35 @@ const StaffList = () => {
   
   const user = getCurrentUser();
   const [staffList, setStaffList] = useState([]);
+  const [previewData, setPreviewData] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const [filterPeriodo, setFilterPeriodo] = useState('Todos');
+  const [filterStatus, setFilterStatus] = useState('Todos');
+  const [filterSede, setFilterSede] = useState('Todos');
+  const [activeActionMenu, setActiveActionMenu] = useState(null);
   
-  const [isAddDocenteModalOpen, setIsAddDocenteModalOpen] = useState(false); // Modal Ingresar Docente
-  const [newDocente, setNewDocente] = useState({ cedula: '', nombres: '', apellidos: '' });
+  const [isAddDocenteModalOpen, setIsAddDocenteModalOpen] = useState(false);
+  const [newDocente, setNewDocente] = useState({ cedula: '', nombres: '', apellidos: '', sedeCentro: '', periodoAcademico: '', department: currentDept });
   const [staffToView, setStaffToView] = useState(null); 
-  const [staffToValidate, setStaffToValidate] = useState(null); // Docente que vamos a validar materias
+  const [staffToEdit, setStaffToEdit] = useState(null);
+  const [staffToValidate, setStaffToValidate] = useState(null);
   const [staffToPrint, setStaffToPrint] = useState(null); 
+  const [staffToNotify, setStaffToNotify] = useState(null); 
+  const [staffToSendFicha, setStaffToSendFicha] = useState(null);
+  const [isReplicateModalOpen, setIsReplicateModalOpen] = useState(false);
+  const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
+  const [initialPeriodIdToEdit, setInitialPeriodIdToEdit] = useState(null);
+  const [academicPeriodsList, setAcademicPeriodsList] = useState([]);
+  const [staffHistoryToView, setStaffHistoryToView] = useState(null);
+  const [activeTab, setActiveTab] = useState('docentes');
   
-  const [materiasForm, setMateriasForm] = useState([{ nombre: '', horasSemanal: 0, horasLapso: 0 }]);
+  // Paginación
+  const [currentPageDocentes, setCurrentPageDocentes] = useState(1);
+  const [currentPageOferta, setCurrentPageOferta] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+
+  const [materiasForm, setMateriasForm] = useState([{ nombre: '', especialidadDestino: '', horasSemanal: 0, horasLapso: 0 }]);
   const [validationForm, setValidationForm] = useState({
     periodoAcademico: `${new Date().getFullYear()}-I`,
     semanas: 15,
@@ -48,29 +105,58 @@ const StaffList = () => {
   });
   const [cursosList, setCursosList] = useState([]);
 
-  const academicPeriods = React.useMemo(() => {
+  const academicPeriods = useMemo(() => {
+    if (academicPeriodsList && academicPeriodsList.length > 0) {
+      return academicPeriodsList.map(p => p.nombre);
+    }
     const year = new Date().getFullYear();
     return [
       `${year}-I`, `${year}-II`,
       `${year + 1}-I`, `${year + 1}-II`,
       `${year + 2}-I`, `${year + 2}-II`
     ];
-  }, []);
+  }, [academicPeriodsList]);
 
-  const fetchData = async () => {
-    const staff = await getStaffData();
-    setStaffList(staff);
+  const fetchData = async (period = filterPeriodo) => {
+    const staff = await getStaffData(period);
+    setStaffList(staff || []);
     const catalogo = await getCatalogoMaterias();
-    setCursosList(catalogo);
+    setCursosList(catalogo || []);
+    try {
+      const pList = await getAcademicPeriodsList();
+      setAcademicPeriodsList(pList || []);
+    } catch (e) {}
   };
 
   useEffect(() => {
-    fetchData();
-  }, [currentDept]);
+    fetchData(filterPeriodo);
+  }, [currentDept, filterPeriodo]);
 
-  if (user && user.role === 'JEFE' && user.department !== currentDept) {
-    return <Navigate to={`/departamento/${encodeURIComponent(user.department)}`} replace />;
-  }
+  useEffect(() => {
+    setCurrentPageDocentes(1);
+    setCurrentPageOferta(1);
+  }, [debouncedSearchTerm, filterPeriodo, filterStatus, filterSede]);
+
+  useEffect(() => {
+    if (!activeActionMenu) return;
+    const handleOutsideClick = (e) => {
+      if (e.target.closest('.row-actions-portal-menu') || e.target.closest('.row-actions-trigger-btn')) {
+        return;
+      }
+      setActiveActionMenu(null);
+    };
+    const handleScrollOrResize = () => {
+      setActiveActionMenu(null);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [activeActionMenu]);
 
   const theme = getDeptTheme(currentDept);
 
@@ -87,8 +173,31 @@ const StaffList = () => {
       });
 
       if (existingDocente) {
-        alert(`Error: La cédula ${newDocente.cedula} ya está registrada en el sistema a nombre de ${existingDocente.nombres} ${existingDocente.apellidos} (${existingDocente.department}).`);
-        return;
+        if (matchDepartment(existingDocente.department, currentDept)) {
+          alert(`El docente ${existingDocente.nombres} ${existingDocente.apellidos} (C.I: ${newDocente.cedula}) ya está registrado en este departamento (${currentDept}).`);
+          return;
+        }
+
+        const wantsToInclude = window.confirm(
+          `El docente ${existingDocente.nombres} ${existingDocente.apellidos} (C.I: ${newDocente.cedula}) ya se encuentra registrado en el departamento de "${existingDocente.department}".\n\n¿Desea asociarlo también al departamento de "${currentDept}" para que pertenezca a ambos departamentos simultáneamente?`
+        );
+
+        if (wantsToInclude) {
+          const updatedDepts = normalizeDepartmentName(`${existingDocente.department}, ${currentDept}`);
+          const updatedStaff = {
+            ...existingDocente,
+            department: updatedDepts
+          };
+          createStaff(updatedStaff).then(() => {
+            fetchData();
+            alert(`¡Docente ${existingDocente.nombres} ${existingDocente.apellidos} ahora pertenece a: ${updatedDepts}!`);
+          });
+          setNewDocente({ cedula: '', nombres: '', apellidos: '', sedeCentro: 'Rubio', periodoAcademico: '', department: currentDept });
+          setIsAddDocenteModalOpen(false);
+          return;
+        } else {
+          return;
+        }
       }
     }
     
@@ -97,55 +206,240 @@ const StaffList = () => {
       cedula: newDocente.cedula,
       nombres: newDocente.nombres.toUpperCase(),
       apellidos: newDocente.apellidos.toUpperCase(),
-      department: currentDept,
-      status: 'Por Revisar',
-      fechaNac: '', rif: '', direccion: '', telefonos: '', cuentaBancaria: '',
-      banco: '', tipoCuenta: 'Ahorro', titulosPregrado: '', titulosPostgrado: '',
-      categoriaDocente: 'Instructor', dedicacion: 'Tiempo Convencional',
-      periodoAcademico: `${new Date().getFullYear()}-I`, semanas: 15, fechaDesde: '', fechaHasta: '',
+      department: normalizeDepartmentName(newDocente.department || currentDept),
+      sedeCentro: newDocente.sedeCentro || 'Rubio',
+      fechaNac: newDocente.fechaNac || '', rif: newDocente.rif || '', direccion: newDocente.direccion || '', telefonos: newDocente.telefonos || '', cuentaBancaria: newDocente.cuentaBancaria || '',
+      banco: newDocente.banco || '', tipoCuenta: newDocente.tipoCuenta || 'Ahorro', titulosPregrado: newDocente.titulosPregrado || '', titulosPostgrado: newDocente.titulosPostgrado || '',
+      categoriaDocente: newDocente.categoriaDocente || 'Instructor', dedicacion: newDocente.dedicacion || 'Tiempo Convencional',
+      periodoAcademico: newDocente.periodoAcademico || (academicPeriodsList.find(p => p.estado === 'ACTIVO')?.nombre || `${new Date().getFullYear()}-I`),
+      semanas: 15, fechaDesde: '', fechaHasta: '',
       materias: []
     };
 
-    // Import createStaff from data (wait, StaffList imports saveStaffData, we should change the import and use createStaff)
-    // However, createStaff doesn't exist in imports. I need to update imports.
-    // Let's just update the list locally for immediate feedback, then send to backend.
     const updatedList = [newStaff, ...staffList];
     setStaffList(updatedList);
     createStaff(newStaff).then(() => fetchData());
     
-    // Clear new docente state
-    setNewDocente({ cedula: '', nombres: '', apellidos: '' });
+    setNewDocente({ cedula: '', nombres: '', apellidos: '', sedeCentro: 'Rubio', periodoAcademico: '', department: currentDept });
     setIsAddDocenteModalOpen(false);
   };
 
-  // --- LÓGICA DE VALIDACIÓN DE MATERIAS ---
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'cuentaBancaria') {
+      const clean = value.replace(/\D/g, '').slice(0, 20);
+      setStaffToEdit({ ...staffToEdit, cuentaBancaria: clean });
+      return;
+    }
+    setStaffToEdit({ ...staffToEdit, [name]: value });
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (staffToEdit) {
+      await createStaff(staffToEdit);
+      await fetchData();
+      if (staffToView && staffToView.cedula === staffToEdit.cedula) {
+        setStaffToView({ ...staffToView, ...staffToEdit });
+      }
+      setStaffToEdit(null);
+    }
+  };
+
+  const handleDelete = async (staff) => {
+    if (!staff || !staff.cedula) return;
+    const nombre = staff.nombres ? `${staff.nombres} ${staff.apellidos}` : (staff.apellidos || staff.cedula);
+    const confirmed = window.confirm(
+      `¿Está seguro de que desea eliminar al docente ${nombre} (C.I: ${staff.cedula}) del departamento ${currentDept}?\n\nEsta acción eliminará su registro de la base de datos.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const ok = await deleteStaff(staff.cedula);
+      if (ok) {
+        await fetchData();
+        if (staffToView && staffToView.cedula === staff.cedula) setStaffToView(null);
+        if (staffToEdit && staffToEdit.cedula === staff.cedula) setStaffToEdit(null);
+        alert(`El docente ${nombre} ha sido eliminado exitosamente.`);
+      } else {
+        alert('No se pudo eliminar el docente. Verifique permisos o conexión.');
+      }
+    } catch (err) {
+      console.error('Error al eliminar docente:', err);
+      alert('Ocurrió un error al intentar eliminar al docente.');
+    }
+  };
+
+  const handleOpenAuditorPreview = () => {
+    try {
+      const activeOrSelectedPeriod = academicPeriodsList.find(p => (filterPeriodo !== 'Todos' ? p.nombre === filterPeriodo : p.estado === 'ACTIVO')) || academicPeriodsList[0];
+      const activePeriod = academicPeriodsList.find(p => p.estado === 'ACTIVO');
+      const isPlanning = activeOrSelectedPeriod?.estado === 'PLANIFICACION';
+      const periodLabel = activeOrSelectedPeriod?.nombre || (filterPeriodo !== 'Todos' ? filterPeriodo : '2026-I');
+
+      const isLapsoActivo = activePeriod && (activeOrSelectedPeriod?.id === activePeriod.id || activeOrSelectedPeriod?.nombre === activePeriod.nombre || filterPeriodo === 'Todos');
+
+      const staffToExport = filteredStaff.filter(staff => {
+        const isDocenteLapsoActivo = activePeriod && (staff.periodoAcademico === activePeriod.nombre || !staff.periodoAcademico);
+        if (isLapsoActivo && isDocenteLapsoActivo) {
+          return (staff.status === 'Validado' || staff.status === 'Activo') && (staff.materias || []).length > 0;
+        }
+        return true;
+      });
+
+      if (staffToExport.length === 0) {
+        alert(`No hay registros de docentes con carga verificada para el período "${periodLabel}"${currentDept !== 'Todos' ? ` en el departamento ${currentDept}` : ''}.\n\nSolo se exportan las fichas de aquellos docentes cuya carga ha sido validada.`);
+        return;
+      }
+
+      const vigenciaTexto = isPlanning 
+        ? 'Período en Planificación (Sin fechas lectivas)'
+        : (activeOrSelectedPeriod && activeOrSelectedPeriod.fechaDesde && activeOrSelectedPeriod.fechaHasta)
+          ? `Vigencia: ${formatFechaEspanol(activeOrSelectedPeriod.fechaDesde)} al ${formatFechaEspanol(activeOrSelectedPeriod.fechaHasta)} (${activeOrSelectedPeriod.semanas || 15} sem)`
+          : `(${activeOrSelectedPeriod?.semanas || 15} sem)`;
+
+      const headerRows = [
+        ["UNIVERSIDAD PEDAGÓGICA EXPERIMENTAL LIBERTADOR"],
+        ["INSTITUTO PEDAGÓGICO RURAL GERVASIO RUBIO - UNIDAD DE TALENTO HUMANO"],
+        [`MATRIZ AUDITABLE DE TALENTO HUMANO - DEPARTAMENTO: ${currentDept}`],
+        [`Período Académico: ${activeOrSelectedPeriod?.nombre || (filterPeriodo !== 'Todos' ? filterPeriodo : '2026-I')}${isPlanning ? ' (EN PLANIFICACIÓN)' : ''} | ${vigenciaTexto} | Departamento: ${currentDept} | Centro de Atención / Sede: ${filterSede} | Emisión: ${new Date().toLocaleDateString('es-VE')}`],
+        [],
+        [
+          "N°", "CÉDULA", "DOCENTE (APELLIDOS Y NOMBRES)", "RIF", "BANCO", "TIPO CUENTA", "Nº CUENTA BANCARIA",
+          "ESTATUS BANCO", "TELÉFONO", "CORREO PERSONAL", "CORREO INSTITUCIONAL", "DIRECCIÓN", "PREGRADO",
+          "POSTGRADO", "DOCTORADO", "CATEGORÍA", "DEDICACIÓN", "DEPARTAMENTO", "SEDE/CENTRO", "ESPECIALIDAD",
+          "PERÍODO", "ESTATUS", "CANT. MAT.", "H. SEM", "H. LAPSO", "ASIGNATURAS ASIGNADAS"
+        ]
+      ];
+
+      const dataRows = staffToExport.map((staff, idx) => {
+        const totSem = (staff.materias || []).reduce((sum, m) => sum + (parseInt(m.horasSemanal) || 0), 0);
+        const totLap = (staff.materias || []).reduce((sum, m) => sum + (parseInt(m.horasLapso) || 0), 0);
+        const matCount = (staff.materias || []).length;
+        const matSummary = (staff.materias || []).map(m => {
+          const sec = m.seccion || m.secciones || '';
+          const cup = (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '';
+          const ins = (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '';
+          const coh = m.cohorte || '';
+          const extra = [sec ? `Sec: ${sec}` : '', (cup !== '' || ins !== '') ? `Cup/Ins: ${cup || '-'}/${ins || '-'}` : '', coh ? `Cohorte: ${coh}` : ''].filter(Boolean).join(' | ');
+          return `${m.nombre}${extra ? ` [${extra}]` : ''} (${m.horasSemanal}h)`;
+        }).join('; ');
+        const tieneBanco = Boolean(staff.banco && staff.cuentaBancaria);
+        const hasDocenteMats = matCount > 0 && totSem > 0;
+        const statusDocente = (hasDocenteMats && (staff.status === 'Validado' || staff.status === 'Activo')) ? 'Validado' : 'Por Revisar';
+
+        return [
+          idx + 1,
+          staff.cedula || 'S/C',
+          `${staff.apellidos || ''}, ${staff.nombres || ''}`.trim(),
+          staff.rif || 'N/A',
+          staff.banco || '⚠️ Sin Banco',
+          staff.tipoCuenta || 'Ahorro',
+          staff.cuentaBancaria ? String(staff.cuentaBancaria) : '⚠️ Sin Cuenta',
+          tieneBanco ? 'Completo' : 'Incompleto',
+          staff.telefonos || 'N/A',
+          staff.correo || 'N/A',
+          staff.correoInstitucional || 'N/A',
+          staff.direccion || 'N/A',
+          staff.titulosPregrado || 'N/A',
+          staff.titulosPostgrado || 'N/A',
+          staff.doctorado || 'N/A',
+          staff.categoriaDocente || 'Instructor',
+          staff.dedicacion || 'Tiempo Convencional',
+          normalizeDepartmentName(staff.department || currentDept),
+          staff.sedeCentro || 'Rubio',
+          staff.especialidad || 'N/A',
+          staff.periodoAcademico || 'N/A',
+          statusDocente,
+          matCount,
+          totSem,
+          totLap,
+          matSummary || 'Sin asignaciones'
+        ];
+      });
+
+      const safePeriodFile = periodLabel.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeDeptFile = (currentDept || 'Docentes').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      setPreviewData({
+        headerRows,
+        dataRows,
+        colsWidth: [
+          { wch: 6 },  { wch: 14 }, { wch: 30 }, { wch: 15 }, { wch: 25 }, 
+          { wch: 14 }, { wch: 24 }, { wch: 15 }, { wch: 16 }, { wch: 25 }, 
+          { wch: 28 }, { wch: 30 }, { wch: 25 }, { wch: 22 }, { wch: 20 }, 
+          { wch: 16 }, { wch: 20 }, { wch: 24 }, { wch: 16 }, { wch: 20 }, 
+          { wch: 15 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, 
+          { wch: 45 }
+        ],
+        sheetName: `Fichas_${safePeriodFile}`,
+        fileName: `Docentes_${safeDeptFile}_Lapso_${safePeriodFile}.xlsx`,
+        title: `Vista Previa de Exportación - Fichas Completas (${currentDept} - Lapso ${periodLabel})`
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Error al preparar vista previa: " + err.message);
+    }
+  };
+
   const handleOpenValidate = (staff) => {
+    const activePeriodObj = academicPeriodsList.find(p => p.estado === 'ACTIVO');
+    const staffPeriodObj = academicPeriodsList.find(p => p.nombre === staff.periodoAcademico);
+    const selectedPeriodName = (filterPeriodo !== 'Todos' ? filterPeriodo : null) 
+      || (staffPeriodObj && staffPeriodObj.estado === 'ACTIVO' ? staff.periodoAcademico : null)
+      || activePeriodObj?.nombre 
+      || staff.periodoAcademico 
+      || '2026-II';
+    const periodObj = academicPeriodsList.find(p => p.nombre === selectedPeriodName) || activePeriodObj;
+
+    if (periodObj?.estado === 'PLANIFICACION') {
+      alert(`Operación bloqueada: El período académico "${selectedPeriodName}" se encuentra en PLANIFICACIÓN.\n\nNo está permitido cargar ni asignar materias porque el período no está abierto.\nPara habilitar la carga académica, debe activarse oficialmente desde Gestión de Lapsos.`);
+      return;
+    }
+
+    if (periodObj?.estado === 'CERRADO') {
+      alert(`Operación bloqueada: El período académico "${selectedPeriodName}" se encuentra CERRADO.\n\nNo está permitido modificar la carga académica de un período concluido.`);
+      return;
+    }
+
+
     setStaffToValidate(staff);
-    const currentPeriod = `${new Date().getFullYear()}-${new Date().getMonth() < 6 ? 'I' : 'II'}`;
     setValidationForm({
-      periodoAcademico: staff.periodoAcademico || currentPeriod,
-      semanas: staff.semanas || 15,
-      fechaDesde: staff.fechaDesde || '',
-      fechaHasta: staff.fechaHasta || ''
+      periodoAcademico: selectedPeriodName,
+      semanas: periodObj?.semanas || 15,
+      fechaDesde: periodObj?.fechaDesde || staff.fechaDesde || '',
+      fechaHasta: periodObj?.fechaHasta || staff.fechaHasta || ''
     });
-    if (staff.materias && staff.materias.length > 0) {
-      setMateriasForm(staff.materias);
+    if (Array.isArray(staff.materias) && staff.materias.length > 0) {
+      setMateriasForm(staff.materias.map(m => ({
+        nombre: m.nombre || '',
+        especialidadDestino: m.especialidadDestino || staff.especialidad || '',
+        seccion: m.seccion !== undefined && m.seccion !== null ? String(m.seccion) : '',
+        cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
+        inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
+        cohorte: (m.cohorte !== undefined && m.cohorte !== null) ? String(m.cohorte).trim() : '',
+        horasSemanal: parseInt(m.horasSemanal) || 0,
+        horasLapso: (parseInt(m.horasSemanal) || 0) * 15
+      })));
     } else {
-      setMateriasForm([{ nombre: '', horasSemanal: 0, horasLapso: 0 }]);
+      setMateriasForm([{ nombre: '', especialidadDestino: staff.especialidad || '', seccion: '', cupos: '', inscritos: '', cohorte: '', horasSemanal: 0, horasLapso: 0 }]);
     }
   };
 
   const handleValidationFormChange = (e) => {
     const { name, value } = e.target;
-    setValidationForm({ ...validationForm, [name]: value });
-
-    if (name === 'semanas') {
-      const newSemanas = parseInt(value) || 0;
-      setMateriasForm(materiasForm.map(mat => ({
-        ...mat,
-        horasLapso: (parseInt(mat.horasSemanal) || 0) * newSemanas
-      })));
+    if (name === 'periodoAcademico') {
+      const periodObj = academicPeriodsList.find(p => p.nombre === value);
+      setValidationForm({
+        ...validationForm,
+        periodoAcademico: value,
+        semanas: periodObj?.semanas || 15,
+        fechaDesde: periodObj?.fechaDesde || '',
+        fechaHasta: periodObj?.fechaHasta || ''
+      });
+      return;
     }
+    setValidationForm({ ...validationForm, [name]: value });
   };
 
   const handleMateriaChange = (index, field, value) => {
@@ -153,15 +447,14 @@ const StaffList = () => {
     newMaterias[index] = { ...newMaterias[index], [field]: value };
     
     if (field === 'horasSemanal') {
-      const semanas = parseInt(validationForm.semanas) || 0;
-      newMaterias[index].horasLapso = (parseInt(value) || 0) * semanas;
+      newMaterias[index].horasLapso = (parseInt(value) || 0) * 15;
     }
     
     setMateriasForm(newMaterias);
   };
 
   const addMateria = () => {
-    setMateriasForm([...materiasForm, { nombre: '', horasSemanal: 0, horasLapso: 0 }]);
+    setMateriasForm([...materiasForm, { nombre: '', especialidadDestino: staffToValidate?.especialidad || '', seccion: '', cupos: '', inscritos: '', cohorte: '', horasSemanal: 0, horasLapso: 0 }]);
   };
 
   const removeMateria = (index) => {
@@ -169,20 +462,52 @@ const StaffList = () => {
     setMateriasForm(newMaterias);
   };
 
+  const handleCopyMateriasFromHistory = (materias, periodo) => {
+    if (!materias || materias.length === 0) {
+      alert('Este período no tiene materias registradas.');
+      return;
+    }
+    setMateriasForm(materias.map(m => ({
+      nombre: m.nombre || '',
+      especialidadDestino: m.especialidadDestino || '',
+      seccion: m.seccion !== undefined && m.seccion !== null ? String(m.seccion) : '',
+      cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
+      inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
+      cohorte: (() => {
+        const raw = (m.cohorte !== undefined && m.cohorte !== null) ? String(m.cohorte).trim() : '';
+        return (raw && raw !== periodo && raw !== '2026-I' && raw !== '2026-II') ? raw : '';
+      })(),
+      horasSemanal: parseInt(m.horasSemanal) || 0,
+      horasLapso: (parseInt(m.horasSemanal) || 0) * 15
+    })));
+    alert(`¡Carga cargada! Se copiaron las ${materias.length} materias del período ${periodo} al formulario actual.`);
+  };
+
   const handleSaveValidation = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!staffToValidate) return;
-    
-    // Filtrar materias vacías para no enviar "fantasmas" a la base de datos
+
+    const targetPeriodObj = academicPeriodsList.find(p => p.nombre === validationForm.periodoAcademico);
+    if (targetPeriodObj && targetPeriodObj.estado === 'PLANIFICACION') {
+      alert(`Operación bloqueada: El período académico "${validationForm.periodoAcademico}" se encuentra en PLANIFICACIÓN.\n\nNo está permitido cargar ni validar materias porque el período no está abierto.\nPara habilitar la carga académica, debe activarse oficialmente desde Gestión de Lapsos.`);
+      return;
+    }
+    if (targetPeriodObj && targetPeriodObj.estado === 'CERRADO') {
+      alert(`Operación bloqueada: El período académico "${validationForm.periodoAcademico}" se encuentra CERRADO.\n\nNo está permitido modificar la carga académica de un período concluido.`);
+      return;
+    }
+
     const cleanMaterias = materiasForm.filter(m => m.nombre && m.nombre.trim() !== '');
+    const firstMatEsp = cleanMaterias.find(m => m.especialidadDestino && m.especialidadDestino.trim() !== '')?.especialidadDestino;
+    const finalEspecialidad = staffToValidate.especialidad || firstMatEsp || '';
     
-    console.log("Guardando validación para:", staffToValidate.cedula, validationForm, cleanMaterias);
     try {
       const updatedList = staffList.map(staff => {
         if (staff.cedula === staffToValidate.cedula) {
           return { 
             ...staff, 
             ...validationForm,
+            especialidad: finalEspecialidad,
             materias: cleanMaterias, 
             status: 'Activo' 
           };
@@ -191,10 +516,19 @@ const StaffList = () => {
       });
       setStaffList(updatedList);
       
-      const res = await updateStaffCarga(staffToValidate.cedula, cleanMaterias, 'Activo', validationForm);
+      const res = await updateStaffCarga(staffToValidate.cedula, cleanMaterias, 'Activo', {
+        ...validationForm,
+        especialidad: finalEspecialidad
+      });
       if (res) {
-        // Refrescar para asegurar sincronización con MySQL
-        fetchData();
+        await fetchData(filterPeriodo);
+        if (staffToView && staffToView.cedula === staffToValidate.cedula) {
+          setStaffToView({ ...staffToView, ...validationForm, especialidad: finalEspecialidad, materias: cleanMaterias, status: 'Activo' });
+        }
+        const savedDocente = { ...staffToValidate, ...validationForm, especialidad: finalEspecialidad, materias: cleanMaterias, status: 'Activo' };
+        if (window.confirm("¡Carga Académica Validada con Éxito!\n\n¿Desea enviar la Ficha Oficial de Oferta Académica al correo institucional del docente ahora mismo?")) {
+          setStaffToSendFicha(savedDocente);
+        }
       } else {
         alert("Hubo un error al guardar en la base de datos. Verifica la conexión.");
       }
@@ -206,6 +540,10 @@ const StaffList = () => {
   };
 
   const handleAddMateriaGlobal = async () => {
+    if (user?.role !== 'ADMIN') {
+      alert("Operación denegada: Solo el Administrador del Sistema puede agregar nuevas materias al catálogo.");
+      return;
+    }
     const newName = window.prompt("Ingrese el nombre exacto de la NUEVA MATERIA para agregar al catálogo general del sistema:");
     if (newName && newName.trim().length > 0) {
       const res = await addMateriaCatalogo(newName.trim());
@@ -214,616 +552,342 @@ const StaffList = () => {
         setCursosList(catalogo);
         alert(`La materia "${res.nombre}" fue agregada exitosamente al catálogo global.`);
       } else {
-        alert("Ocurrió un error o la materia ya existe.");
+        alert(res?.message || "Ocurrió un error o la materia ya existe.");
       }
     }
   };
 
   const filteredStaff = useMemo(() => {
     return staffList.filter(staff => {
-      const matchesDept = staff.department === currentDept;
-      const searchLower = debouncedSearchTerm.toLowerCase();
-      const fullName = `${staff.nombres} ${staff.apellidos}`.toLowerCase();
-      const ci = staff.cedula?.toLowerCase() || '';
+      const matchesDept = currentDept === 'Todos' || matchDepartment(staff.department, currentDept);
+      const matchesPeriod = filterPeriodo === 'Todos' || staff.periodoAcademico === filterPeriodo;
+      const contractStatus = getDocenteContractStatus(staff, academicPeriodsList);
+      const matchesStatus = filterStatus === 'Todos' || staff.status === filterStatus || contractStatus === filterStatus;
+      const matchesSede = filterSede === 'Todos' || staff.sedeCentro === filterSede;
+      if (!debouncedSearchTerm.trim()) return matchesDept && matchesPeriod && matchesStatus && matchesSede;
+
+      const fullName = `${staff.nombres || ''} ${staff.apellidos || ''}`;
+      const matchesMateria = staff.materias && staff.materias.some(m => 
+        matchesSearch(m.nombre, debouncedSearchTerm) ||
+        matchesSearch(m.especialidadDestino, debouncedSearchTerm) ||
+        matchesSearch(m.seccion, debouncedSearchTerm)
+      );
       
-      return matchesDept && (fullName.includes(searchLower) || ci.includes(searchLower));
+      const matchesDoc = matchesSearch(fullName, debouncedSearchTerm) || 
+        matchesSearch(staff.cedula, debouncedSearchTerm) || 
+        matchesSearch(staff.especialidad, debouncedSearchTerm) || 
+        matchesSearch(staff.titulosPregrado, debouncedSearchTerm) || 
+        matchesMateria;
+
+      return matchesDept && matchesPeriod && matchesStatus && matchesSede && matchesDoc;
     }).sort((a, b) => {
       const numA = parseInt(a.cedula?.replace(/\D/g, '')) || 0;
       const numB = parseInt(b.cedula?.replace(/\D/g, '')) || 0;
       return numA - numB;
     });
-  }, [staffList, currentDept, debouncedSearchTerm]);
+  }, [staffList, currentDept, debouncedSearchTerm, filterPeriodo, filterStatus, filterSede, academicPeriodsList]);
+
+  const ofertaConsolidada = useMemo(() => {
+    const oferta = [];
+    const activePeriodName = academicPeriodsList.find(p => p.estado === 'ACTIVO')?.nombre || '2026-II';
+
+    staffList.forEach(staff => {
+      const matchesPeriod = filterPeriodo === 'Todos' || staff.periodoAcademico === filterPeriodo;
+      const matchesStatus = filterStatus === 'Todos' || staff.status === filterStatus;
+      const matchesSede = filterSede === 'Todos' || staff.sedeCentro === filterSede;
+      if (!matchesPeriod || !matchesStatus || !matchesSede) return;
+
+      // REGLA INSTITUCIONAL UPEL: En la oferta consolidada del lapso activo,
+      // solo debe mostrarse la carga académica formalmente verificada y validada por la Jefatura (status 'Activo' o 'Validado').
+      const targetPeriod = filterPeriodo !== 'Todos' ? filterPeriodo : staff.periodoAcademico;
+      const isLapsoActivo = targetPeriod && activePeriodName && targetPeriod === activePeriodName;
+      if (isLapsoActivo) {
+        const isValidada = (staff.status === 'Validado' || staff.status === 'Activo') && (staff.materias || []).length > 0;
+        if (!isValidada) return;
+      }
+
+      if (staff.materias && staff.materias.length > 0) {
+        staff.materias.forEach(mat => {
+          const matchesDept = currentDept === 'Todos' || 
+            matchDepartment(staff.department, currentDept) || 
+            matchDepartment(mat.especialidadDestino, currentDept);
+          if (!matchesDept) return;
+
+          if (debouncedSearchTerm.trim()) {
+            const fullName = `${staff.nombres || ''} ${staff.apellidos || ''}`;
+            const matchesQuery = matchesSearch(fullName, debouncedSearchTerm) || 
+              matchesSearch(staff.cedula, debouncedSearchTerm) || 
+              matchesSearch(mat.nombre, debouncedSearchTerm) || 
+              matchesSearch(mat.especialidadDestino, debouncedSearchTerm) || 
+              matchesSearch(mat.seccion, debouncedSearchTerm) || 
+              matchesSearch(staff.especialidad, debouncedSearchTerm);
+            if (!matchesQuery) return;
+          }
+
+          oferta.push({ ...mat, staff });
+        });
+      }
+    });
+
+    return oferta.sort((a, b) => {
+      const cmp = (a.nombre || '').localeCompare(b.nombre || '');
+      if (cmp !== 0) return cmp;
+      return (a.seccion || '').localeCompare(b.seccion || '');
+    });
+  }, [staffList, currentDept, debouncedSearchTerm, filterPeriodo, filterStatus, filterSede, academicPeriodsList]);
+
+  const currentTotalDocentes = filteredStaff.length;
+  const pageSizeDocentes = itemsPerPage === 'Todos' ? currentTotalDocentes : (parseInt(itemsPerPage) || 25);
+  const totalPagesDocentes = itemsPerPage === 'Todos' ? 1 : Math.max(1, Math.ceil(currentTotalDocentes / pageSizeDocentes));
+
+  const paginatedDocentes = useMemo(() => {
+    if (itemsPerPage === 'Todos') return filteredStaff;
+    const size = parseInt(itemsPerPage) || 25;
+    const start = (currentPageDocentes - 1) * size;
+    return filteredStaff.slice(start, start + size);
+  }, [filteredStaff, currentPageDocentes, itemsPerPage]);
+
+  const currentTotalOferta = ofertaConsolidada.length;
+  const pageSizeOferta = itemsPerPage === 'Todos' ? currentTotalOferta : (parseInt(itemsPerPage) || 25);
+  const totalPagesOferta = itemsPerPage === 'Todos' ? 1 : Math.max(1, Math.ceil(currentTotalOferta / pageSizeOferta));
+
+  const paginatedOferta = useMemo(() => {
+    if (itemsPerPage === 'Todos') return ofertaConsolidada;
+    const size = parseInt(itemsPerPage) || 25;
+    const start = (currentPageOferta - 1) * size;
+    return ofertaConsolidada.slice(start, start + size);
+  }, [ofertaConsolidada, currentPageOferta, itemsPerPage]);
+
+  if (user && user.role === 'JEFE' && !matchDepartment(user.department, currentDept)) {
+    return <Navigate to={`/departamento/${encodeURIComponent(user.department)}`} replace />;
+  }
 
   if (staffToPrint) {
-    return <PrintableFicha staff={staffToPrint} onBack={() => setStaffToPrint(null)} />;
+    return (
+      <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: '#0047bb', fontWeight: 700 }}>Cargando Ficha Institucional...</div>}>
+        <PrintableFicha staff={staffToPrint} onBack={() => setStaffToPrint(null)} />
+      </Suspense>
+    );
   }
 
   return (
     <div className="animate-fade-in">
-      <div style={{
-        background: `linear-gradient(135deg, ${theme.bg} 0%, rgba(255,255,255,0) 100%)`,
-        border: `1px solid ${theme.bg}`,
-        borderLeft: `5px solid ${theme.color}`,
-        borderRadius: 'var(--radius-lg)',
-        padding: '2rem',
-        marginBottom: '2rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '1rem',
-        boxShadow: 'var(--shadow-sm)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-          <div style={{ 
-            background: theme.color, color: 'white', width: '60px', height: '60px', 
-            borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: `0 4px 10px ${theme.color}40`
-          }}>
-            {theme.icon}
+      <Suspense fallback={null}>
+        <NotificationModal 
+          isOpen={!!staffToNotify}
+          staff={staffToNotify}
+          onClose={() => setStaffToNotify(null)}
+        />
+
+        <SendFichaEmailModal 
+          isOpen={!!staffToSendFicha}
+          staff={staffToSendFicha}
+          jefeName={user?.name || 'Jefe de Departamento'}
+          onClose={() => setStaffToSendFicha(null)}
+        />
+      </Suspense>
+
+      <StaffHeader 
+        currentDept={currentDept}
+        theme={theme}
+        user={user}
+        academicPeriodsList={academicPeriodsList}
+        filterPeriodo={filterPeriodo}
+        filterSede={filterSede}
+        ofertaConsolidada={ofertaConsolidada}
+        setPreviewData={setPreviewData}
+        handleOpenAuditorPreview={handleOpenAuditorPreview}
+        setIsReplicateModalOpen={setIsReplicateModalOpen}
+        setIsPeriodModalOpen={setIsPeriodModalOpen}
+        setIsAddDocenteModalOpen={setIsAddDocenteModalOpen}
+        getInstitutionalHeaderSubtitle={getInstitutionalHeaderSubtitle}
+        normalizeDepartmentName={normalizeDepartmentName}
+      />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
+        <div className="upel-card upel-card-accent-blue" style={{ padding: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.8rem', marginBottom: '0.75rem' }}>
+            <div>
+              <div className="upel-section-subtitle">
+                <span>📚</span> Plantel Docente
+              </div>
+              <h3 className="upel-section-title">
+                Fichas y Carga Académica
+              </h3>
+            </div>
           </div>
-          <div>
-            <h1 style={{ margin: 0, color: 'var(--text-main)', fontSize: '2rem' }}>{currentDept}</h1>
-            <p style={{ margin: '0.2rem 0 0', color: 'var(--text-muted)', fontSize: '1rem', fontWeight: 500 }}>
-              Gestión y Autorización de docentes contratados
-            </p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button className="btn btn-outline" onClick={() => {
-            const validatedStaff = filteredStaff.filter(staff => staff.status !== 'Por Revisar');
-            
-            if (validatedStaff.length === 0) {
-              alert('No hay docentes con información validada para exportar en este departamento.');
-              return;
-            }
+          <div className="upel-section-divider" style={{ marginTop: '0.2rem', marginBottom: '1.25rem' }} />
 
-            const worksheet = XLSX.utils.json_to_sheet(validatedStaff.map(staff => ({
-              Cédula: staff.cedula,
-              Nombres: staff.nombres,
-              Apellidos: staff.apellidos,
-              Teléfonos: staff.telefonos || 'N/A',
-              Correo: staff.correo || 'N/A',
-              Dirección: staff.direccion || 'N/A',
-              'Títulos Pregrado': staff.titulosPregrado || 'N/A',
-              'Títulos Postgrado': staff.titulosPostgrado || 'N/A',
-              'Doctorado': staff.doctorado || 'N/A',
-              'Categoría Docente': staff.categoriaDocente || 'N/A',
-              'Dedicación': staff.dedicacion || 'N/A',
-              'Materias Asignadas': staff.materias && staff.materias.length > 0 
-                ? staff.materias.map(m => `${m.nombre} (${m.horasSemanal}h)`).join('; ') 
-                : 'Sin materias asignadas',
-              'Vigencia Desde': staff.fechaDesde || 'N/A',
-              'Vigencia Hasta': staff.fechaHasta || 'N/A',
-              Estado: staff.status
-            })));
-            
-            const headerStyle = {
-              font: { bold: true, color: { rgb: "FFFFFF" } },
-              fill: { fgColor: { rgb: "2563EB" } },
-              border: {
-                top: { style: "thin", color: { rgb: "000000" } },
-                bottom: { style: "thin", color: { rgb: "000000" } },
-                left: { style: "thin", color: { rgb: "000000" } },
-                right: { style: "thin", color: { rgb: "000000" } }
-              },
-              alignment: { horizontal: "center", vertical: "center" }
-            };
-            
-            const cellStyle = {
-              border: {
-                top: { style: "thin", color: { rgb: "CBD5E1" } },
-                bottom: { style: "thin", color: { rgb: "CBD5E1" } },
-                left: { style: "thin", color: { rgb: "CBD5E1" } },
-                right: { style: "thin", color: { rgb: "CBD5E1" } }
-              },
-              alignment: { vertical: "center", wrapText: true }
-            };
+          <StaffToolbar 
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            filterPeriodo={filterPeriodo}
+            setFilterPeriodo={setFilterPeriodo}
+            academicPeriodsList={academicPeriodsList}
+            academicPeriods={academicPeriods}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+            filterSede={filterSede}
+            setFilterSede={setFilterSede}
+            staffList={staffList}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            theme={theme}
+          />
 
-            const range = XLSX.utils.decode_range(worksheet['!ref']);
-            for (let R = range.s.r; R <= range.e.r; ++R) {
-              for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
-                if (!worksheet[cellRef]) continue;
-                if (R === 0) {
-                  worksheet[cellRef].s = headerStyle;
-                } else {
-                  worksheet[cellRef].s = cellStyle;
-                }
-              }
-            }
-            
-            worksheet['!cols'] = [
-              { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, 
-              { wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, 
-              { wch: 20 }, { wch: 45 }, { wch: 15 }, { wch: 15 }, { wch: 12 }
-            ];
-
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Docentes');
-            XLSX.writeFile(workbook, `Docentes_${currentDept}.xlsx`);
-          }}>
-            <Printer size={18} />
-            <span>Exportar a Excel</span>
-          </button>
-          {user?.role === 'JEFE' && (
-            <>
-              <button className="btn btn-outline" onClick={() => document.getElementById('excelUpload').click()}>
-                <Upload size={18} />
-                <span>Carga Masiva (Excel)</span>
-              </button>
-              <input 
-                type="file" 
-                id="excelUpload" 
-                accept=".xlsx, .xls" 
-                style={{ display: 'none' }} 
-                onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = (evt) => {
-                    try {
-                      const bstr = evt.target.result;
-                      const workbook = XLSX.read(bstr, { type: 'binary' });
-                      const ws = workbook.Sheets[workbook.SheetNames[0]];
-                      const data = XLSX.utils.sheet_to_json(ws);
-                      
-                      let updatedList = [...staffList];
-                      let changes = 0;
-                      
-                      data.forEach(row => {
-                        const cedula = String(row.Cedula || row.cedula || row.Cédula || '').trim();
-                        const materia = String(row.Materia || row.materia || row.Curso || row.nom_Curso || '').trim();
-                        const horasS = parseInt(row.Horas_Semanal || row.horas_semanales || 0);
-                        const horasL = parseInt(row.Horas_Lapso || row.horas_lapso || 0);
-                        
-                        if (cedula && materia) {
-                          const staffIndex = updatedList.findIndex(s => s.cedula === cedula);
-                          if (staffIndex !== -1) {
-                            const staff = updatedList[staffIndex];
-                            if (!staff.materias) staff.materias = [];
-                            
-                            // Check if materia already exists
-                            const existing = staff.materias.find(m => m.nombre === materia);
-                            if (!existing) {
-                              staff.materias.push({ nombre: materia, horasSemanal: horasS, horasLapso: horasL });
-                              staff.status = 'Activo';
-                              changes++;
-                            }
-                          }
-                        }
-                      });
-                      
-                      if (changes > 0) {
-                        setStaffList(updatedList);
-                        fetch('http://localhost:3001/api/migrate', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ docentes: updatedList })
-                        }).then(() => fetchData());
-                        alert(`Se han asignado ${changes} materias correctamente a los docentes correspondientes.`);
-                      } else {
-                        alert('No se encontraron coincidencias o los docentes ya tenían esas materias asignadas.');
-                      }
-                    } catch (error) {
-                      console.error(error);
-                      alert('Error al leer el archivo Excel. Asegúrese de que tenga las columnas: Cedula, Materia, Horas_Semanal, Horas_Lapso.');
-                    }
-                    e.target.value = '';
-                  };
-                  reader.readAsBinaryString(file);
-                }} 
-              />
-              <button className="btn btn-primary" onClick={() => setIsAddDocenteModalOpen(true)} style={{ background: theme.color, borderColor: theme.color }}>
-                <Plus size={18} />
-                <span>Ingresar Docente</span>
-              </button>
-            </>
+          {activeTab === 'docentes' ? (
+            <StaffTable 
+              paginatedDocentes={paginatedDocentes}
+              filteredStaffCount={filteredStaff.length}
+              currentPageDocentes={currentPageDocentes}
+              totalPagesDocentes={totalPagesDocentes}
+              setCurrentPageDocentes={setCurrentPageDocentes}
+              itemsPerPage={itemsPerPage}
+              setItemsPerPage={setItemsPerPage}
+              academicPeriodsList={academicPeriodsList}
+              filterPeriodo={filterPeriodo}
+              user={user}
+              handleOpenValidate={handleOpenValidate}
+              activeActionMenu={activeActionMenu}
+              setActiveActionMenu={setActiveActionMenu}
+              isExpedienteCompleto={isExpedienteCompleto}
+              getDocenteContractStatus={getDocenteContractStatus}
+              getStatusBadgeInfo={getStatusBadgeInfo}
+            />
+          ) : (
+            <StaffOfertaTable 
+              paginatedOferta={paginatedOferta}
+              ofertaConsolidada={ofertaConsolidada}
+              currentPageOferta={currentPageOferta}
+              totalPagesOferta={totalPagesOferta}
+              setCurrentPageOferta={setCurrentPageOferta}
+              itemsPerPage={itemsPerPage}
+              setItemsPerPage={setItemsPerPage}
+            />
           )}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
-        {/* Lista Principal de Docentes */}
-        <div className="surface" style={{ padding: '1.5rem' }}>
-          <h3 style={{ marginBottom: '1.5rem' }}>Fichas de Docentes</h3>
-          <div className="filters-bar" style={{ justifyContent: 'flex-start' }}>
-            <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
-              <Search size={18} className="text-muted" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-              <input 
-                type="text" 
-                className="filter-input" 
-                placeholder="Buscar docente por nombre o cédula..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ width: '100%', paddingLeft: '2.5rem' }}
-              />
-            </div>
-          </div>
+      <Suspense fallback={null}>
+        <StaffEditModal 
+          staffToEdit={staffToEdit}
+          setStaffToEdit={setStaffToEdit}
+          handleEditChange={handleEditChange}
+          handleSaveEdit={handleSaveEdit}
+          currentDept={currentDept}
+        />
 
-          <div className="table-container table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Docente</th>
-                  <th>Títulos</th>
-                  <th>Materias Asignadas</th>
-                  <th>Vigencia</th>
-                  <th>Estado Ficha</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStaff.length > 0 ? (
-                  filteredStaff.map(staff => {
-                    const isPending = staff.status === 'Por Revisar';
-                    return (
-                      <tr key={staff.id}>
-                        <td>
-                          <div className="user-name">{staff.apellidos}, {staff.nombres}</div>
-                          <div className="user-email">C.I: {staff.cedula}</div>
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 500 }}>{staff.titulosPregrado}</div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{staff.categoriaDocente}</div>
-                        </td>
-                        <td style={{ fontSize: '0.85rem', maxWidth: '250px' }}>
-                          {staff.materias && staff.materias.length > 0 ? (
-                            <ul style={{ margin: 0, paddingLeft: '1rem', color: 'var(--text-main)' }}>
-                              {staff.materias.map((m, i) => (
-                                <li key={i}>{m.nombre} <strong style={{ color: 'var(--primary)' }}>({m.horasSemanal}h)</strong></li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)' }}>Sin materias asignadas</span>
-                          )}
-                        </td>
-                        <td>
-                          <div>{staff.fechaDesde || 'N/A'} al {staff.fechaHasta || 'N/A'}</div>
-                        </td>
-                        <td>
-                          <span className={`badge ${isPending ? 'badge-warning' : 'badge-success'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                            {isPending ? <Clock size={14} /> : <CheckSquare size={14} />}
-                            {isPending ? 'Requiere Materias' : 'Validado'}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            {user?.role === 'JEFE' && (
-                              <button 
-                                className="btn btn-primary" 
-                                style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                                onClick={() => handleOpenValidate(staff)}
-                                title={isPending ? "Cargar materias y validar" : "Modificar Carga Académica"}
-                              >
-                                {isPending ? <CheckSquare size={16} /> : <Calculator size={16} />} {isPending ? 'Cargar' : 'Modificar'}
-                              </button>
-                            )}
-                            {!isPending && (
-                              <>
-                                <button 
-                                  className="btn btn-outline" 
-                                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                                  onClick={() => setStaffToView(staff)}
-                                  title="Ver toda la información"
-                                >
-                                  <Eye size={16} />
-                                </button>
-                                <button 
-                                  className="btn btn-primary" 
-                                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                                  onClick={() => setStaffToPrint(staff)}
-                                  title="Imprimir Ficha Completa"
-                                >
-                                  <Printer size={16} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan="5" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                      No hay docentes registrados en este departamento que coincidan con la búsqueda.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+        <StaffValidateModal 
+          staffToValidate={staffToValidate}
+          setStaffToValidate={setStaffToValidate}
+          setStaffToEdit={setStaffToEdit}
+          setStaffHistoryToView={setStaffHistoryToView}
+          validationForm={validationForm}
+          handleValidationFormChange={handleValidationFormChange}
+          materiasForm={materiasForm}
+          handleMateriaChange={handleMateriaChange}
+          removeMateria={removeMateria}
+          addMateria={addMateria}
+          handleAddMateriaGlobal={handleAddMateriaGlobal}
+          handleSaveValidation={handleSaveValidation}
+          academicPeriodsList={academicPeriodsList}
+          academicPeriods={academicPeriods}
+          cursosList={cursosList}
+          user={user}
+        />
 
-      {/* Modal para VALIDAR Y CARGAR MATERIAS (Jefe de Dpto) */}
-      {staffToValidate && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100,
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '1rem'
-        }}>
-          <div className="surface animate-fade-in" style={{ width: '98%', maxWidth: '1200px', maxHeight: '98vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--primary-light)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ background: 'white', padding: '0.5rem', borderRadius: '50%', color: 'var(--primary)' }}><CheckSquare size={28} /></div>
-                <div>
-                  <h2 style={{ marginBottom: 0, color: 'var(--primary-dark)' }}>Validación y Carga Académica</h2>
-                  <div className="subtitle" style={{ color: 'var(--primary)' }}>{staffToValidate.nombres} {staffToValidate.apellidos} - C.I: {staffToValidate.cedula}</div>
-                </div>
-              </div>
-              <button onClick={() => setStaffToValidate(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={24} className="text-muted" />
-              </button>
-            </div>
-            
-            <div style={{ overflowY: 'auto', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '-0.5rem' }}>Verifique los datos básicos ingresados por el docente:</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', background: 'var(--bg-app)', padding: '1.5rem', borderRadius: 'var(--radius-sm)' }}>
-                <div>
-                  <div className="form-label">Datos Personales</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Teléfono:</strong> {staffToValidate.telefonos}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Dirección:</strong> {staffToValidate.direccion}</div>
-                </div>
-                <div>
-                  <div className="form-label">Perfil Académico</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Pregrado:</strong> {staffToValidate.titulosPregrado}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Postgrado:</strong> {staffToValidate.titulosPostgrado || 'N/A'}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Categoría:</strong> {staffToValidate.categoriaDocente}</div>
-                </div>
-              </div>
+        <StaffDetailModal 
+          staffToView={staffToView}
+          setStaffToView={setStaffToView}
+          setStaffToEdit={setStaffToEdit}
+          handleDelete={handleDelete}
+          setStaffToPrint={setStaffToPrint}
+          user={user}
+        />
 
-              <form id="validateForm" onSubmit={handleSaveValidation} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                <div style={{ overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  
-                  {/* Asignación de Periodo y Vigencia por el Jefe */}
-                  <div style={{ background: 'var(--primary-light)', padding: '1.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(0,0,0,0.05)' }}>
-                    <h3 style={{ borderBottom: '2px solid var(--primary)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Período y Vigencia del Contrato</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1rem' }}>
-                      <div>
-                        <label className="form-label" style={{ color: 'var(--primary-dark)' }}>Período Académico</label>
-                        <select 
-                          required 
-                          name="periodoAcademico" 
-                          value={validationForm.periodoAcademico} 
-                          onChange={handleValidationFormChange} 
-                          className="filter-select w-full"
-                          style={{ background: 'white' }}
-                        >
-                          {academicPeriods.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="form-label" style={{ color: 'var(--primary-dark)' }}>Semanas</label>
-                        <input type="number" name="semanas" value={validationForm.semanas} onChange={handleValidationFormChange} className="filter-input w-full" style={{ background: 'white' }} />
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                      <div>
-                        <label className="form-label">Fecha Desde</label>
-                        <input type="date" name="fechaDesde" value={validationForm.fechaDesde} onChange={handleValidationFormChange} className="filter-input w-full" style={{ background: 'white' }} />
-                      </div>
-                      <div>
-                        <label className="form-label">Fecha Hasta</label>
-                        <input type="date" name="fechaHasta" value={validationForm.fechaHasta} onChange={handleValidationFormChange} className="filter-input w-full" style={{ background: 'white' }} />
-                      </div>
-                    </div>
-                  </div>
+        <StaffCreateModal 
+          isOpen={isAddDocenteModalOpen}
+          onClose={() => setIsAddDocenteModalOpen(false)}
+          newDocente={newDocente}
+          setNewDocente={setNewDocente}
+          handleSubmit={handleAddDocenteSubmit}
+          currentDept={currentDept}
+          theme={theme}
+          academicPeriodsList={academicPeriodsList}
+          academicPeriods={academicPeriods}
+        />
 
-                  <div>
-                    <h3 style={{ borderBottom: '2px solid var(--primary)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Asignación de Materias (Oferta Académica)</h3>
-                    <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>Llene las materias que dictará este docente para que queden registradas digitalmente en la ficha final.</p>
-                  
-                    <div className="table-responsive">
-                    <table style={{ width: '100%', marginBottom: '1rem', borderCollapse: 'collapse', minWidth: '500px' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid var(--border-light)' }}>Materia / Unidad Curricular</th>
-                          <th style={{ textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid var(--border-light)', width: '120px' }}>Horas Semanal</th>
-                          <th style={{ textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid var(--border-light)', width: '120px' }}>Horas Lapso</th>
-                          <th style={{ width: '50px' }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {materiasForm.map((mat, index) => (
-                          <tr key={index}>
-                            <td style={{ padding: '0.5rem' }}>
-                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                <select value={mat.nombre} onChange={(e) => handleMateriaChange(index, 'nombre', e.target.value)} className="filter-select w-full" style={{ flex: 1 }}>
-                                  <option value="">Seleccione una materia...</option>
-                                  {(Array.isArray(cursosList) ? cursosList : (cursosList?.default || [])).map((curso, idx) => (
-                                    <option key={idx} value={curso}>{curso}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </td>
-                            <td style={{ padding: '0.5rem' }}>
-                              <input type="number" min="0" value={mat.horasSemanal} onChange={(e) => handleMateriaChange(index, 'horasSemanal', e.target.value)} className="filter-input w-full" style={{ textAlign: 'center' }} />
-                            </td>
-                            <td style={{ padding: '0.5rem' }}>
-                              <input type="number" min="0" value={mat.horasLapso} onChange={(e) => handleMateriaChange(index, 'horasLapso', e.target.value)} className="filter-input w-full" style={{ textAlign: 'center' }} />
-                            </td>
-                            <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                              <button type="button" onClick={() => removeMateria(index)} className="btn btn-outline" style={{ padding: '0.3rem', color: 'var(--danger)', borderColor: 'var(--danger-bg)' }}>
-                                <X size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    </div>
-                    <button type="button" className="btn btn-outline" onClick={addMateria} style={{ fontSize: '0.85rem' }}>
-                      <Plus size={16} /> Añadir otra materia
-                    </button>
-                  </div>
-                </div>
-                
-                <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'var(--bg-app)' }}>
-                  <button type="button" className="btn btn-outline" onClick={() => setStaffToValidate(null)}>Cancelar</button>
-                  <button type="submit" className="btn btn-primary">
-                    <CheckSquare size={18} /> Validar y Guardar Ficha
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+        <ReplicatePeriodModal 
+          isOpen={isReplicateModalOpen}
+          onClose={() => setIsReplicateModalOpen(false)}
+          sourceStaffList={staffList}
+          currentDept={currentDept}
+          academicPeriodsList={academicPeriodsList}
+          onGoToLapsos={() => {
+            setIsReplicateModalOpen(false);
+            setIsPeriodModalOpen(true);
+          }}
+          onReplicationSuccess={() => fetchData()}
+        />
 
+        <TeacherHistoryModal 
+          isOpen={!!staffHistoryToView}
+          onClose={() => setStaffHistoryToView(null)}
+          staff={staffHistoryToView}
+          onCopyMaterias={(materias, periodo) => {
+            if (staffToValidate) {
+              handleCopyMateriasFromHistory(materias, periodo);
+            } else {
+              handleOpenValidate(staffHistoryToView);
+              setTimeout(() => {
+                handleCopyMateriasFromHistory(materias, periodo);
+              }, 100);
+            }
+          }}
+        />
 
-      {/* Modal de Detalles del Docente (Solo Lectura) */}
-      {staffToView && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100,
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '1rem'
-        }}>
-          <div className="surface animate-fade-in" style={{ width: '98%', maxWidth: '1000px', maxHeight: '98vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ background: 'var(--primary-light)', padding: '0.5rem', borderRadius: '50%', color: 'var(--primary)' }}><User size={28} /></div>
-                <div>
-                  <h2 style={{ marginBottom: 0 }}>{staffToView.nombres} {staffToView.apellidos}</h2>
-                  <div className="subtitle">C.I: {staffToView.cedula} | {staffToView.department}</div>
-                </div>
-              </div>
-              <button onClick={() => setStaffToView(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={24} className="text-muted" />
-              </button>
-            </div>
-            
-            <div style={{ overflowY: 'auto', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-                <div>
-                  <div className="form-label">Periodo Académico</div>
-                  <div style={{ fontWeight: 500 }}>{staffToView.periodoAcademico} ({staffToView.semanas} semanas)</div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{staffToView.fechaDesde} al {staffToView.fechaHasta}</div>
-                </div>
-                <div>
-                  <div className="form-label">Datos Personales</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Nacimiento:</strong> {staffToView.fechaNac}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Teléfono:</strong> {staffToView.telefonos}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Correo:</strong> {staffToView.correo}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Dirección:</strong> {staffToView.direccion}</div>
-                </div>
-                <div>
-                  <div className="form-label">Datos Bancarios</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Banco:</strong> {staffToView.banco}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Cuenta:</strong> {staffToView.cuentaBancaria} ({staffToView.tipoCuenta})</div>
-                </div>
-                <div>
-                  <div className="form-label">Perfil Académico</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Pregrado:</strong> {staffToView.titulosPregrado}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Postgrado:</strong> {staffToView.titulosPostgrado || 'N/A'}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Doctorado:</strong> {staffToView.doctorado || 'N/A'}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Categoría:</strong> {staffToView.categoriaDocente}</div>
-                  <div style={{ fontSize: '0.9rem' }}><strong>Dedicación:</strong> {staffToView.dedicacion}</div>
-                </div>
-              </div>
+        <PeriodManagementModal 
+          isOpen={isPeriodModalOpen}
+          initialPeriodIdToEdit={initialPeriodIdToEdit}
+          onClose={() => {
+            setIsPeriodModalOpen(false);
+            setInitialPeriodIdToEdit(null);
+          }}
+          onPeriodActivated={(newPeriod) => {
+            const p = newPeriod || 'Todos';
+            setFilterPeriodo(p);
+            fetchData(p);
+          }}
+        />
 
-              {staffToView.materias && staffToView.materias.length > 0 && (
-                <div>
-                  <div className="form-label">Materias / Oferta Académica</div>
-                  <div className="table-responsive" style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', minWidth: '400px' }}>
-                      <thead style={{ background: 'var(--bg-app)' }}>
-                        <tr>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border-light)' }}>Asignatura</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border-light)' }}>H. Semanales</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border-light)' }}>H. Lapso</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {staffToView.materias.map((mat, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                            <td style={{ padding: '0.75rem' }}>{mat.nombre}</td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center' }}>{mat.horasSemanal}</td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center' }}>{mat.horasLapso}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'var(--bg-app)' }}>
-              <button type="button" className="btn btn-outline" onClick={() => setStaffToView(null)}>Cerrar</button>
-            </div>
-          </div>
-        </div>
-      )}
+        {previewData && (
+          <ExcelPreviewModal 
+            isOpen={true}
+            onClose={() => setPreviewData(null)}
+            headerRows={previewData.headerRows}
+            dataRows={previewData.dataRows}
+            colsWidth={previewData.colsWidth}
+            fileName={previewData.fileName}
+            sheetName={previewData.sheetName || 'Fichas_Docentes'}
+            title={previewData.title || "Vista Previa de Exportación"}
+          />
+        )}
 
-      {/* Modal for Ingresar Docente Manualmente */}
-      {isAddDocenteModalOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem'
-        }}>
-          <div className="surface animate-fade-in" style={{ width: '100%', maxWidth: '500px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h2 style={{ marginBottom: 0 }}>Ingresar Nuevo Docente</h2>
-                <div className="subtitle">Agregar a {currentDept}</div>
-              </div>
-              <button onClick={() => setIsAddDocenteModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={24} className="text-muted" />
-              </button>
-            </div>
-            
-            <div style={{ padding: '1.5rem' }}>
-              <form id="addDocenteForm" onSubmit={handleAddDocenteSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div>
-                  <label className="form-label">Cédula de Identidad</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={newDocente.cedula} 
-                    onChange={(e) => setNewDocente({...newDocente, cedula: e.target.value})} 
-                    className="filter-input w-full" 
-                    placeholder="Ej. V-12345678"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Nombres</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={newDocente.nombres} 
-                    onChange={(e) => setNewDocente({...newDocente, nombres: e.target.value})} 
-                    className="filter-input w-full" 
-                    placeholder="Ej. Juan Carlos"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Apellidos</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={newDocente.apellidos} 
-                    onChange={(e) => setNewDocente({...newDocente, apellidos: e.target.value})} 
-                    className="filter-input w-full" 
-                    placeholder="Ej. Pérez Gómez"
-                  />
-                </div>
-                <p className="text-muted" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                  El docente será agregado a la lista y podrá asignarle materias inmediatamente. Luego, el docente podrá ingresar al portal público con esta cédula para completar sus datos bancarios y personales.
-                </p>
-              </form>
-            </div>
-            
-            <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'var(--bg-app)' }}>
-              <button type="button" className="btn btn-outline" onClick={() => setIsAddDocenteModalOpen(false)}>Cancelar</button>
-              <button type="submit" form="addDocenteForm" className="btn btn-primary" style={{ background: theme.color, borderColor: theme.color }}>Registrar Docente</button>
-            </div>
-          </div>
-        </div>
-      )}
+        <StaffActionMenuPortal 
+          activeActionMenu={activeActionMenu}
+          setActiveActionMenu={setActiveActionMenu}
+          setStaffToView={setStaffToView}
+          setStaffToPrint={setStaffToPrint}
+          setStaffToEdit={setStaffToEdit}
+          setStaffToSendFicha={setStaffToSendFicha}
+          setStaffToNotify={setStaffToNotify}
+          setStaffHistoryToView={setStaffHistoryToView}
+          handleDelete={handleDelete}
+          user={user}
+          isExpedienteCompleto={isExpedienteCompleto}
+          getMissingExpedienteFields={getMissingExpedienteFields}
+        />
+      </Suspense>
 
       <style>{`
         .w-full { width: 100%; }
