@@ -450,8 +450,15 @@ router.put('/periodos/:id/reactivar', requireRole(['ADMIN', 'DOCENCIA', 'AUDITOR
       await db.query(`
         UPDATE docentes_contrataciones_v3 
         SET periodo_id = (SELECT id FROM periodos_academicos_v3 WHERE nombre = ? LIMIT 1),
+            semanas = ?,
+            fecha_desde = ?,
             fecha_hasta = ?
-      `, [periodoObj.nombre, finalFechaHasta]);
+      `, [periodoObj.nombre, periodoObj.semanas || 15, periodoObj.fechaDesde, finalFechaHasta]);
+      await db.query(`
+        UPDATE cargas_historicas 
+        SET semanas = ?, fechaDesde = ?, fechaHasta = ? 
+        WHERE periodo_id = (SELECT id FROM periodos_academicos_v3 WHERE nombre = ? LIMIT 1)
+      `, [periodoObj.semanas || 15, periodoObj.fechaDesde, finalFechaHasta, periodoObj.nombre]);
     } catch (eDoc) {}
 
     invalidateDocentesCache(true);

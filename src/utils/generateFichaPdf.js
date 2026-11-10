@@ -3,7 +3,11 @@ import autoTable from 'jspdf-autotable';
 import { getDocenteInstitutionalEmail } from './fichaEmailTemplate';
 
 export const generateFichaPdf = async (staff, options = {}) => {
-  const { jefeName = 'Jefe de Departamento' } = options;
+  const { jefeName = 'Jefe de Departamento', periodInfo = null } = options;
+  const targetPeriodo = periodInfo?.nombre || staff.periodoAcademico || '2026-I';
+  const targetSemanas = periodInfo?.semanas || staff.semanas || 15;
+  const targetDesde = periodInfo?.fechaDesde || staff.fechaDesde || '13/04/2026';
+  const targetHasta = periodInfo?.fechaHasta || staff.fechaHasta || '02/10/2026';
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -54,15 +58,15 @@ export const generateFichaPdf = async (staff, options = {}) => {
     body: [
       [
         { content: 'LAPSO:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], width: 20 } },
-        { content: `Total Semanas: ${staff.semanas || 15}`, styles: { width: 70 } },
+        { content: `Total Semanas: ${targetSemanas}`, styles: { width: 70 } },
         { content: 'PERIODO ACADÉMICO:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], width: 45 } },
-        { content: staff.periodoAcademico || '2026-I', styles: { width: 50 } }
+        { content: targetPeriodo, styles: { width: 50 } }
       ],
       [
         { content: 'DEPARTAMENTO:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
         { content: staff.department || 'General' },
         { content: 'VIGENCIA:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
-        { content: `Desde: ${staff.fechaDesde || '13/04/2026'}  Hasta: ${staff.fechaHasta || '02/10/2026'}` }
+        { content: `Desde: ${targetDesde}  Hasta: ${targetHasta}` }
       ]
     ],
     margin: { left: 14, right: 14 }

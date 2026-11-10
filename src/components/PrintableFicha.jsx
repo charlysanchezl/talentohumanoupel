@@ -9,6 +9,7 @@ const PrintableFicha = ({ staff, onBack }) => {
   const [jefeName, setJefeName] = useState('');
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [activePeriod, setActivePeriod] = useState(null);
+  const [academicPeriods, setAcademicPeriods] = useState([]);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
 
@@ -18,6 +19,7 @@ const PrintableFicha = ({ staff, onBack }) => {
         if (periods && periods.length > 0) {
           const act = periods.find(p => p.estado === 'ACTIVO') || periods[0];
           if (act) setActivePeriod(act);
+          setAcademicPeriods(periods);
         }
       })
       .catch(e => console.error("Error fetching periods in PrintableFicha:", e));
@@ -88,15 +90,17 @@ const PrintableFicha = ({ staff, onBack }) => {
     );
   }
 
-  const displayPeriodo = staff.periodoAcademico || activePeriod?.nombre || '2026-I';
-  const displaySemanas = staff.semanas || activePeriod?.semanas || 15;
-  const displayFechaDesde = staff.fechaDesde || activePeriod?.fechaDesde || '13/04/2026';
-  const displayFechaHasta = staff.fechaHasta || activePeriod?.fechaHasta || '02/10/2026';
+  const targetPeriodName = staff.periodoAcademico || activePeriod?.nombre || '2026-I';
+  const targetPeriodObj = academicPeriods.find(p => p.nombre === targetPeriodName) || activePeriod;
+  const displayPeriodo = targetPeriodName;
+  const displaySemanas = targetPeriodObj?.semanas || staff.semanas || 15;
+  const displayFechaDesde = targetPeriodObj?.fechaDesde || staff.fechaDesde || '13/04/2026';
+  const displayFechaHasta = targetPeriodObj?.fechaHasta || staff.fechaHasta || '02/10/2026';
 
   const handleDownloadPdf = async () => {
     try {
       setDownloadingPdf(true);
-      const { doc } = await generateFichaPdf(staff, { jefeName });
+      const { doc } = await generateFichaPdf(staff, { jefeName, periodInfo: { nombre: displayPeriodo, semanas: displaySemanas, fechaDesde: displayFechaDesde, fechaHasta: displayFechaHasta } });
       doc.save(`Ficha_${staff.cedula || 'Docente'}_${staff.apellidos || ''}.pdf`);
     } catch (err) {
       console.error("Error al descargar PDF:", err);
@@ -128,7 +132,7 @@ const PrintableFicha = ({ staff, onBack }) => {
 
     try {
       setPrintingPdf(true);
-      const { doc } = await generateFichaPdf(staff, { jefeName });
+      const { doc } = await generateFichaPdf(staff, { jefeName, periodInfo: { nombre: displayPeriodo, semanas: displaySemanas, fechaDesde: displayFechaDesde, fechaHasta: displayFechaHasta } });
       
       // Habilitar diálogo de impresión automático en el visor PDF oficial
       doc.autoPrint();
