@@ -419,8 +419,19 @@ router.put('/periodos/:id/reactivar', requireRole(['ADMIN', 'DOCENCIA', 'AUDITOR
     }
     const periodoObj = pRows[0];
 
-    // 1. Cerrar cualquier otro período que pudiera estar marcado como ACTIVO
-    await db.query("UPDATE periodos_academicos SET estado = 'CERRADO', fechaCierre = CURRENT_TIMESTAMP WHERE estado = 'ACTIVO' AND id != ? AND nombre != ?", [periodoObj.id, periodoObj.nombre]);
+    // 1. Cerrar de forma segura cualquier otro período marcado como ACTIVO (resguardando su carga en vivo si le pertenece)
+    const [prevActives] = await db.query(
+      "SELECT * FROM periodos_academicos WHERE estado = 'ACTIVO' AND id != ? AND nombre != ?",
+      [periodoObj.id, periodoObj.nombre]
+    );
+    for (const prev of prevActives) {
+      const [prevDm] = await db.query('SELECT COUNT(*) AS cnt FROM docentes_materias WHERE periodoAcademico = ?', [prev.nombre]);
+      if (parseInt(prevDm[0]?.cnt || 0) > 0) {
+        await cerrarPeriodoSeguro(prev, auditor, `Resguardo automático antes de reactivar ${periodoObj.nombre}`);
+      } else {
+        await db.query("UPDATE periodos_academicos SET estado = 'CERRADO', fechaCierre = CURRENT_TIMESTAMP WHERE id = ?", [prev.id]);
+      }
+    }
 
     // 2. Extender fecha si estaba vencida
     const hoy = new Date();

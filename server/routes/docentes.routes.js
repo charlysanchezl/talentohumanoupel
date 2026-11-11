@@ -95,49 +95,75 @@ async function fetchDocentesListInternal(periodo) {
       }
     }
 
-    // Si existen materias etiquetadas con el período activo oficial, priorizarlas sobre restos de otros períodos
-    if (activePeriodName) {
-      for (const k of Object.keys(materiasPorDocente)) {
-        const activeMats = materiasPorDocente[k].filter(m => m.periodoAcademico === activePeriodName);
-        if (activeMats.length > 0) {
-          materiasPorDocente[k] = activeMats;
-        }
-      }
-    }
-
+    // Preservar mapa completo por docente para distinguir entre materias del período activo real y restos de otro período
     let fallbackCargasMap = {};
+    let hasHistoricSnapshotForActive = false;
     try {
       const [cargas] = activePeriodName
         ? await db.query('SELECT * FROM cargas_historicas WHERE periodoAcademico = ? ORDER BY id ASC', [activePeriodName])
         : await db.query('SELECT * FROM cargas_historicas ORDER BY id ASC');
+      hasHistoricSnapshotForActive = cargas.length > 0;
       for (const c of cargas) {
         let mats = [];
         try {
           mats = typeof c.materias === 'string' ? JSON.parse(c.materias) : (c.materias || []);
         } catch (e) { mats = []; }
-        if (mats && mats.length > 0) {
-          const normMats = mats.map(m => ({
-            ...m,
-            seccion: m.seccion || m.secciones || '',
-            cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
-            inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
-            cohorte: (m.cohorte !== undefined && m.cohorte !== null && m.cohorte !== '') ? String(m.cohorte).trim() : ''
-          }));
-          const rawKey = String(c.cedula_docente || '').trim();
-          const numKey = rawKey.replace(/\D/g, '');
-          if (rawKey) fallbackCargasMap[rawKey] = normMats;
-          if (numKey && numKey !== rawKey) fallbackCargasMap[numKey] = normMats;
-        }
+        const normMats = (mats || []).map(m => ({
+          ...m,
+          seccion: m.seccion || m.secciones || '',
+          cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
+          inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
+          cohorte: (m.cohorte !== undefined && m.cohorte !== null && m.cohorte !== '') ? String(m.cohorte).trim() : ''
+        }));
+        const entry = {
+          materias: normMats,
+          status: c.status || '',
+          semanas: c.semanas,
+          fechaDesde: c.fechaDesde,
+          fechaHasta: c.fechaHasta
+        };
+        const rawKey = String(c.cedula_docente || '').trim();
+        const numKey = rawKey.replace(/\D/g, '');
+        if (rawKey) fallbackCargasMap[rawKey] = entry;
+        if (numKey && numKey !== rawKey) fallbackCargasMap[numKey] = entry;
       }
     } catch (e) {}
     
     const result = docentes.map(doc => {
       const docNumKey = String(doc.cedula || '').replace(/\D/g, '');
-      let docMats = materiasPorDocente[doc.cedula] || (docNumKey ? materiasPorDocente[docNumKey] : null) || [];
-      const fbMats = fallbackCargasMap[doc.cedula] || fallbackCargasMap[docNumKey] || [];
-      if (docMats.length === 0 && fbMats.length > 0) {
-        docMats = fbMats;
-      } else if (docMats.length > 0 && fbMats.length > 0) {
+      const rawDocMats = materiasPorDocente[doc.cedula] || (docNumKey ? materiasPorDocente[docNumKey] : null) || [];
+      const fbEntry = fallbackCargasMap[doc.cedula] || (docNumKey ? fallbackCargasMap[docNumKey] : null) || null;
+      const fbMats = fbEntry?.materias || [];
+
+      let docMats = [];
+      let usedHistoricFallback = false;
+
+      if (activePeriodName) {
+        const matchingActiveMats = rawDocMats.filter(m => !m.periodoAcademico || m.periodoAcademico === activePeriodName);
+        const hasOtherPeriodLiveMats = rawDocMats.some(m => m.periodoAcademico && m.periodoAcademico !== activePeriodName);
+
+        if (matchingActiveMats.length > 0) {
+          docMats = matchingActiveMats;
+        } else if (hasOtherPeriodLiveMats) {
+          // Si se reabrió un período anterior cuya carga reside en cargas_historicas mientras docentes_materias aún refleja otro período, usar la carga histórica del período activo real
+          if (fbMats.length > 0) {
+            docMats = fbMats;
+            usedHistoricFallback = true;
+          } else if (hasHistoricSnapshotForActive) {
+            docMats = [];
+            usedHistoricFallback = true;
+          } else {
+            docMats = rawDocMats;
+          }
+        } else if (fbMats.length > 0) {
+          docMats = fbMats;
+          usedHistoricFallback = true;
+        }
+      } else {
+        docMats = rawDocMats.length > 0 ? rawDocMats : fbMats;
+      }
+
+      if (docMats.length > 0 && fbMats.length > 0 && !usedHistoricFallback) {
         docMats = docMats.map(dm => {
           if (dm.cohorte && String(dm.cohorte).trim() !== '') return dm;
           const matchFb = fbMats.find(fm => (fm.nombre || '').trim().toUpperCase() === (dm.nombre || '').trim().toUpperCase());
@@ -147,12 +173,15 @@ async function fetchDocentesListInternal(periodo) {
       const totSem = docMats.reduce((sum, m) => sum + (parseInt(m.horasSemanal) || 0), 0);
       const totLap = docMats.reduce((sum, m) => sum + (parseInt(m.horasLapso) || 0), 0);
 
-      const resolvedEsp = resolveDisplayEspecialidad(doc.especialidad, docMats, false);
+      const resolvedEsp = resolveDisplayEspecialidad(doc.especialidad, docMats, usedHistoricFallback);
 
+      const effectiveBaseStatus = usedHistoricFallback
+        ? (fbEntry?.status || (docMats.length > 0 ? 'Validado' : 'Sin Carga'))
+        : doc.status;
       const hasRealLoad = docMats.length > 0 && totSem > 0;
-      const finalStatus = (!hasRealLoad && (doc.status === 'Validado' || doc.status === 'Activo'))
+      const finalStatus = (!hasRealLoad && (effectiveBaseStatus === 'Validado' || effectiveBaseStatus === 'Activo'))
         ? 'Por Revisar'
-        : (doc.status || 'Por Revisar');
+        : (effectiveBaseStatus || 'Por Revisar');
 
       return stripSensitiveDocenteFields({
         ...doc,
@@ -160,9 +189,9 @@ async function fetchDocentesListInternal(periodo) {
         status: finalStatus,
         especialidad: resolvedEsp,
         periodoAcademico: (periodo && periodo !== 'Todos') ? periodo : (activePeriodName || doc.periodoAcademico || '2026-I'),
-        semanas: activePeriodObj?.semanas || doc.semanas || 15,
-        fechaDesde: activePeriodObj?.fechaDesde || doc.fechaDesde || '',
-        fechaHasta: activePeriodObj?.fechaHasta || doc.fechaHasta || '',
+        semanas: activePeriodObj?.semanas || (usedHistoricFallback ? fbEntry?.semanas : null) || doc.semanas || 15,
+        fechaDesde: activePeriodObj?.fechaDesde || (usedHistoricFallback ? fbEntry?.fechaDesde : '') || doc.fechaDesde || '',
+        fechaHasta: activePeriodObj?.fechaHasta || (usedHistoricFallback ? fbEntry?.fechaHasta : '') || doc.fechaHasta || '',
         materias: docMats,
         totalHorasSemanal: totSem,
         totalHorasLapso: totLap
