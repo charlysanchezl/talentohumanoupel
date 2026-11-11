@@ -28,10 +28,15 @@ const aiRoutes = require('./routes/ai.routes');
 const app = express();
 app.set('trust proxy', 1);
 
-const allowedCorsOrigins = (process.env.CORS_ORIGINS || '')
+const appDomains = (process.env.APP_DOMAIN || '')
   .split(',')
-  .map(o => o.trim())
+  .map(d => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
   .filter(Boolean);
+
+const allowedCorsOrigins = [
+  ...(process.env.CORS_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean),
+  ...appDomains.flatMap(d => [`https://${d}`, `http://${d}`])
+];
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -146,8 +151,9 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor backend corriendo en http://0.0.0.0:${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Servidor backend corriendo en http://${HOST}:${PORT}`);
   // Verificación periódica automática de cierre de lapsos por fecha calendario (cada 1 hora)
   setInterval(periodosRoutes.verificarCierreAutomaticoLapsos, 60 * 60 * 1000);
 

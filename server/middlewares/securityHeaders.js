@@ -34,6 +34,14 @@ function securityHeaders(req, res, next) {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   // Deshabilitar APIs de dispositivos innecesarias
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // Evitar políticas cross-domain heredadas y exposición de recursos entre orígenes
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  // Activar HSTS estrictamente cuando la conexión real o detrás de proxy Nginx sea HTTPS
+  const isHttps = req.secure || String(req.headers['x-forwarded-proto'] || '').toLowerCase().includes('https');
+  if (isHttps) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
   // Ocultar firma de Express
   res.removeHeader('X-Powered-By');
   next();
@@ -84,7 +92,7 @@ setInterval(() => {
       rateLimitStore.delete(key);
     }
   }
-}, 10 * 60 * 1000);
+}, 10 * 60 * 1000).unref();
 
 module.exports = {
   securityHeaders,
