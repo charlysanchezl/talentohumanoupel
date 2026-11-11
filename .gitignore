@@ -55,6 +55,7 @@ server/test_*.js
 # REGISTROS Y LOGS
 # ==========================================
 logs/
+backups_aws/
 *.log
 npm-debug.log*
 yarn-debug.log*

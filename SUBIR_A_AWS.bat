@@ -54,5 +54,13 @@ if errorlevel 1 (
 )
 
 echo.
-echo [OK] Sistema actualizado y en linea en https://3.133.148.107
+echo ==^> 3. Descargando copia externa del respaldo SQL hacia backups_aws\...
+if not exist "%~dp0backups_aws" mkdir "%~dp0backups_aws"
+for /f "delims=" %%f in ('ssh -i "%PEM_KEY%" -o BatchMode=yes "%SERVER_HOST%" "ls -1t %APP_DIR%/server/uploads/backups/pre_deploy_*.sql 2>/dev/null | head -n 1"') do set "REMOTE_SQL=%%f"
+if defined REMOTE_SQL (
+  scp -i "%PEM_KEY%" -o BatchMode=yes "%SERVER_HOST%:%REMOTE_SQL%" "%~dp0backups_aws\"
+)
+
+echo.
+echo [OK] Sistema actualizado y respaldo externo guardado en backups_aws\
 pause

@@ -79,9 +79,23 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Endpoint de verificación rápida de conectividad (Health Check)
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, timestamp: Date.now(), server: 'UPEL SIGOA Core' });
+// Endpoint de verificación real de conectividad y base de datos (Health Check)
+app.get('/api/health', async (req, res) => {
+  const exec = typeof db.nativeQuery === 'function' ? db.nativeQuery.bind(db) : db.query.bind(db);
+  let timerId = null;
+  try {
+    await Promise.race([
+      exec('SELECT 1'),
+      new Promise((_, reject) => {
+        timerId = setTimeout(() => reject(new Error('DB health timeout')), 2000);
+      })
+    ]);
+    return res.json({ ok: true, db: 'ok', timestamp: Date.now(), server: 'UPEL SIGOA Core' });
+  } catch (err) {
+    return res.status(503).json({ ok: false, db: 'error', timestamp: Date.now(), server: 'UPEL SIGOA Core' });
+  } finally {
+    if (timerId) clearTimeout(timerId);
+  }
 });
 
 // Servir archivos públicos subidos (flyers, imágenes institucionales)

@@ -25,10 +25,12 @@ if [[ -f "$APP_DIR/server/.env" ]] && command -v mysqldump >/dev/null 2>&1; then
       -P "${DB_PORT:-3306}" \
       -u "$DB_USER" \
       --single-transaction \
+      --no-tablespaces \
       --routines \
       --triggers \
       "$DB_NAME" > "$BACKUP_FILE"
     echo "    Respaldo guardado en: $BACKUP_FILE"
+    ls -1t "$BACKUP_DIR"/pre_deploy_*.sql 2>/dev/null | tail -n +11 | xargs -r rm -f || true
   fi
 fi
 
@@ -53,7 +55,28 @@ echo "==> 4. Compilando frontend..."
 npm run build
 
 echo "==> 5. Recargando servidor backend con PM2..."
-pm2 reload "$PM2_APP"
+pm2 reload "$PM2_APP" --update-env
 pm2 save
+
+echo "==> 6. Verificando salud local (backend + MySQL)..."
+LOCAL_PORT="${PORT:-3001}"
+if [[ -f "$APP_DIR/server/.env" ]]; then
+  ENV_PORT="$(grep -E '^PORT=' "$APP_DIR/server/.env" | tail -n1 | cut -d= -f2 | tr -d '\r' || true)"
+  if [[ -n "$ENV_PORT" ]]; then LOCAL_PORT="$ENV_PORT"; fi
+fi
+HEALTH_OK=0
+for i in $(seq 1 10); do
+  if curl -fsS --max-time 3 "http://127.0.0.1:${LOCAL_PORT}/api/health" >/dev/null 2>&1; then
+    HEALTH_OK=1
+    curl -fsS --max-time 3 "http://127.0.0.1:${LOCAL_PORT}/api/health"
+    echo ""
+    break
+  fi
+  sleep 1
+done
+if [[ "$HEALTH_OK" -ne 1 ]]; then
+  echo "ERROR: /api/health no respondio tras recargar PM2."
+  exit 1
+fi
 
 echo "==> Actualización completada con éxito."
