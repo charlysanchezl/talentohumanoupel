@@ -321,7 +321,7 @@ async function handleInterceptedQuery(executor, sql, params = []) {
   // 3. INSERT INTO docentes_materias ...
   if (upper.startsWith('INSERT') && upper.includes('INTO DOCENTES_MATERIAS')) {
     if (Array.isArray(params) && params.length > 0) {
-      const colMatch = s.match(/INSERT\s+INTO\s+\`?docentes_materias\`?\s*\(([^)]+)\)/i);
+      const colMatch = s.match(/INSERT\s+INTO\s+`?docentes_materias`?\s*\(([^)]+)\)/i);
       const colNames = colMatch ? colMatch[1].split(',').map(c => c.trim().replace(/`/g, '').toLowerCase()) : [];
       const rows = Array.isArray(params[0]) ? params[0] : [params];
       for (const row of rows) {
@@ -435,7 +435,7 @@ async function handleInterceptedQuery(executor, sql, params = []) {
 
   // 5. INSERT INTO docentes (...) VALUES (...) ON DUPLICATE KEY UPDATE ...
   if (upper.startsWith('INSERT') && upper.includes('INTO DOCENTES') && !upper.includes('DOCENTES_MATERIAS') && !upper.includes('DOCENTES_V3') && !upper.includes('DOCENTES_CONTRATACIONES_V3') && !upper.includes('DOCENTES_DATOS_BANCARIOS_V3') && !upper.includes('DOCENTES_FORMACION_ACADEMICA_V3')) {
-    const colMatch = s.match(/INSERT\s+INTO\s+\`?docentes\`?\s*\(([^)]+)\)/i);
+    const colMatch = s.match(/INSERT\s+INTO\s+`?docentes`?\s*\(([^)]+)\)/i);
     if (colMatch && Array.isArray(params) && params.length > 0) {
       const colNames = colMatch[1].split(',').map(c => c.trim().replace(/`/g, ''));
       if (Array.isArray(params[0]) && Array.isArray(params[0][0])) {
