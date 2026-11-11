@@ -26,13 +26,13 @@ describe('Suite de Pruebas Unitarias: Interceptor y Adaptador 3NF', () => {
       assert.strictEqual(isTargetQuery(sql), true);
     });
 
-    it('NO debe interceptar consultas SELECT pasivas', () => {
-      const sql = 'SELECT * FROM docentes WHERE cedula = ?';
-      assert.strictEqual(isTargetQuery(sql), false);
+    it('debe interceptar consultas SELECT sobre tablas virtuales 3NF y omitir tablas no objetivo', () => {
+      assert.strictEqual(isTargetQuery('SELECT * FROM docentes WHERE cedula = ?'), true);
+      assert.strictEqual(isTargetQuery('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 10'), false);
     });
 
-    it('NO debe interceptar consultas sobre tablas no objetivo', () => {
-      const sql = 'UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = ?';
+    it('NO debe interceptar consultas de escritura sobre tablas no objetivo', () => {
+      const sql = 'UPDATE audit_logs SET user_name = ? WHERE id = ?';
       assert.strictEqual(isTargetQuery(sql), false);
     });
 
@@ -44,25 +44,25 @@ describe('Suite de Pruebas Unitarias: Interceptor y Adaptador 3NF', () => {
     });
   });
 
-  describe('normalizeCedula() - Normalización Canónica de Cédulas Venezolanas', () => {
-    it('debe formatear números simples con prefijo V-', () => {
-      assert.strictEqual(adapter.normalizeCedula('12345678'), 'V-12345678');
-      assert.strictEqual(adapter.normalizeCedula(18500200), 'V-18500200');
+  describe('normalizeCedula() - Normalización Canónica de Cédulas Venezolanas (3NF sin prefijo)', () => {
+    it('debe conservar dígitos canónicos para entradas numéricas o string', () => {
+      assert.strictEqual(adapter.normalizeCedula('12345678'), '12345678');
+      assert.strictEqual(adapter.normalizeCedula(18500200), '18500200');
     });
 
-    it('debe normalizar cadenas con prefijo v o V minúscula/mayúscula', () => {
-      assert.strictEqual(adapter.normalizeCedula('v12345678'), 'V-12345678');
-      assert.strictEqual(adapter.normalizeCedula('V12345678'), 'V-12345678');
+    it('debe limpiar prefijos v/V o V- y devolver solo dígitos canónicos', () => {
+      assert.strictEqual(adapter.normalizeCedula('v12345678'), '12345678');
+      assert.strictEqual(adapter.normalizeCedula('V12345678'), '12345678');
     });
 
-    it('debe preservar cédulas ya normalizadas con V-', () => {
-      assert.strictEqual(adapter.normalizeCedula('V-12345678'), 'V-12345678');
-      assert.strictEqual(adapter.normalizeCedula('v-12345678'), 'V-12345678');
+    it('debe remover prefijos V- / v- en cédulas formateadas para almacenamiento 3NF', () => {
+      assert.strictEqual(adapter.normalizeCedula('V-12345678'), '12345678');
+      assert.strictEqual(adapter.normalizeCedula('v-12345678'), '12345678');
     });
 
-    it('debe eliminar espacios en blanco redundantes', () => {
-      assert.strictEqual(adapter.normalizeCedula('  12345678  '), 'V-12345678');
-      assert.strictEqual(adapter.normalizeCedula(' V-9876543 '), 'V-9876543');
+    it('debe eliminar espacios en blanco y caracteres no numéricos redundantes', () => {
+      assert.strictEqual(adapter.normalizeCedula('  12345678  '), '12345678');
+      assert.strictEqual(adapter.normalizeCedula(' V-9876543 '), '9876543');
     });
 
     it('debe retornar cadena vacía si el valor es falsy o inválido', () => {

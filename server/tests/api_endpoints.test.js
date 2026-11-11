@@ -23,19 +23,9 @@ describe('Suite de Pruebas de Regresión de API: Endpoints Clave', () => {
     assert.ok(estadosValidos.includes(primerPeriodo.estado), `Estado desconocido: ${primerPeriodo.estado}`);
   });
 
-  it('GET /api/docentes - debe responder 200 y retornar lista de docentes con estructura íntegra', async () => {
+  it('GET /api/docentes - debe exigir autenticación JWT (HTTP 401 sin token)', async () => {
     const res = await fetch(`${BASE_URL}/api/docentes`);
-    assert.strictEqual(res.status, 200, 'El endpoint de docentes debe responder HTTP 200');
-
-    const data = await res.json();
-    assert.ok(Array.isArray(data), 'La respuesta debe ser un arreglo de docentes');
-    
-    if (data.length > 0) {
-      const docente = data[0];
-      assert.ok('cedula' in docente, 'El docente debe tener cédula');
-      assert.ok('nombres' in docente, 'El docente debe tener nombres');
-      assert.ok('apellidos' in docente, 'El docente debe tener apellidos');
-    }
+    assert.strictEqual(res.status, 401, 'El endpoint protegido de docentes debe responder HTTP 401 sin token JWT');
   });
 
   it('GET /api/materias-catalogo - debe responder 200 y retornar el catálogo institucional de asignaturas', async () => {

@@ -67,6 +67,9 @@ function scheduleFlush() {
       flushTimer = null;
       flushQueue();
     }, 1500); // Acumula y descarga en lote cada 1.5 segundos
+    if (typeof flushTimer.unref === 'function') {
+      flushTimer.unref();
+    }
   }
 }
 

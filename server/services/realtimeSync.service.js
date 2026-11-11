@@ -114,7 +114,7 @@ setInterval(() => {
       sseClients.delete(client);
     }
   }
-}, 25000);
+}, 25000).unref();
 
 module.exports = {
   registerSSEClient,
