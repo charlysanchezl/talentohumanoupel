@@ -61,7 +61,7 @@ export const getStaffData = async (periodo) => {
     const url = (!isAll) 
       ? `${API_URL}/docentes?periodo=${encodeURIComponent(periodo)}` 
       : `${API_URL}/docentes`;
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: getAuthHeaders() });
     if (res.ok) {
       const rawData = await res.json();
       const data = (Array.isArray(rawData) ? rawData : []).map(d => ({
@@ -264,7 +264,9 @@ export const replicateAcademicPeriod = async ({ periodoOrigen, periodoDestino, s
 
 export const getTeacherHistory = async (cedula) => {
   try {
-    const res = await fetch(`${API_URL}/docentes/${encodeURIComponent(cedula)}/historial`);
+    const res = await fetch(`${API_URL}/docentes/${encodeURIComponent(cedula)}/historial`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) return await res.json();
     return [];
   } catch (err) {
@@ -382,7 +384,9 @@ export const reactivateAcademicPeriod = async (id, { motivo } = {}) => {
 export const getHuerfanasData = async (periodo) => {
   if (!periodo || periodo === 'Todos') return null;
   try {
-    const res = await fetch(`${API_URL}/periodos/${encodeURIComponent(periodo)}/huerfanas`);
+    const res = await fetch(`${API_URL}/periodos/${encodeURIComponent(periodo)}/huerfanas`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) return await res.json();
   } catch (err) {
     console.error('Error fetching orphan courses:', err);
@@ -393,7 +397,9 @@ export const getHuerfanasData = async (periodo) => {
 export const getNecesidadesDocentesData = async (periodo) => {
   if (!periodo || periodo === 'Todos') return null;
   try {
-    const res = await fetch(`${API_URL}/periodos/${encodeURIComponent(periodo)}/necesidades`);
+    const res = await fetch(`${API_URL}/periodos/${encodeURIComponent(periodo)}/necesidades`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) return await res.json();
   } catch (err) {
     console.error('Error fetching academic needs:', err);
@@ -657,9 +663,13 @@ export const getLoginBgConfig = async () => {
 export const saveLoginBgConfig = async (formDataOrData) => {
   try {
     const isFormData = formDataOrData instanceof FormData;
+    const authHeaders = getAuthHeaders();
+    const headers = isFormData
+      ? (authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : undefined)
+      : authHeaders;
     const res = await fetch(`${API_URL}/config/login-bg`, {
       method: 'POST',
-      headers: isFormData ? undefined : { 'Content-Type': 'application/json' },
+      headers,
       body: isFormData ? formDataOrData : JSON.stringify(formDataOrData)
     });
     if (res.ok) {
@@ -678,7 +688,10 @@ export const saveLoginBgConfig = async (formDataOrData) => {
 
 export const resetLoginBgConfig = async () => {
   try {
-    const res = await fetch(`${API_URL}/config/login-bg/reset`, { method: 'POST' });
+    const res = await fetch(`${API_URL}/config/login-bg/reset`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.config) {
@@ -823,7 +836,9 @@ export const generateWhatsAppUrl = (phone, text) => {
 
 export const getMailConfig = async () => {
   try {
-    const res = await fetch(`${API_URL}/mail-config`);
+    const res = await fetch(`${API_URL}/mail-config`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) {
       const data = await res.json();
       return data.config;
@@ -844,7 +859,7 @@ export const getMailConfig = async () => {
 
 export const saveMailConfig = async (config) => {
   const auditor = getCurrentUser();
-  if (config.resendApiKey) {
+  if (config.resendApiKey && config.resendApiKey !== '********') {
     setResendApiKey(config.resendApiKey);
   }
   try {

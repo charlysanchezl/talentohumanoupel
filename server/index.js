@@ -26,11 +26,42 @@ const backupRoutes = require('./routes/backup.routes');
 const aiRoutes = require('./routes/ai.routes');
 
 const app = express();
+app.set('trust proxy', 1);
+
+const allowedCorsOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // Mismo origen, curl o apps nativas
+    if (allowedCorsOrigins.includes(origin)) return callback(null, true);
+    try {
+      const parsed = new URL(origin);
+      const host = parsed.hostname.toLowerCase();
+      if (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '3.133.148.107' ||
+        host.endsWith('.duckdns.org') ||
+        host.endsWith('.upel.edu.ve') ||
+        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+      ) {
+        return callback(null, true);
+      }
+    } catch (e) {}
+    return callback(new Error('Origen no permitido por política CORS institucional'), false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
 
 // Middlewares globales de seguridad y rendimiento
 app.use(securityHeaders);
 app.use(compression());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(authenticateToken);
 app.use('/api', maintenanceMiddleware);

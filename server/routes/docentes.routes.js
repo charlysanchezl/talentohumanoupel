@@ -3,7 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const logger = require('../utils/logger');
-const { requireRole } = require('../middlewares/auth');
+const { requireAuth, requireStaffAuth, requireRole, STAFF_ROLES } = require('../middlewares/auth');
+const { generateToken } = require('../utils/security');
 const { createRateLimiter } = require('../middlewares/securityHeaders');
 const { sanitizeString, validateCedula } = require('../utils/validator');
 const { logAction } = require('../services/auditService');
@@ -15,6 +16,23 @@ const {
   invalidateDocentesCache,
   pendingDocentesFetches
 } = require('../services/docentesCache.service');
+
+function stripSensitiveDocenteFields(doc) {
+  if (!doc || typeof doc !== 'object') return doc;
+  const { clave: _omitClave, ...safeDoc } = doc;
+  return safeDoc;
+}
+
+function canAccessDocenteRecord(user, targetCedula) {
+  if (!user) return false;
+  if (STAFF_ROLES.includes(user.role)) return true;
+  if (user.role === 'DOCENTE_PORTAL') {
+    const userNums = String(user.cedula || '').replace(/\D/g, '');
+    const targetNums = String(targetCedula || '').replace(/\D/g, '');
+    return Boolean(userNums && targetNums && userNums === targetNums);
+  }
+  return false;
+}
 
 // Función centralizada para consultar la BD con coalescing de promesas concurrentes
 async function fetchDocentesListInternal(periodo) {
@@ -106,7 +124,7 @@ async function fetchDocentesListInternal(periodo) {
         ? 'Por Revisar'
         : (doc.status || 'Por Revisar');
 
-      return {
+      return stripSensitiveDocenteFields({
         ...doc,
         department: normalizeDepartmentName(doc.department),
         status: finalStatus,
@@ -118,7 +136,7 @@ async function fetchDocentesListInternal(periodo) {
         materias: docMats,
         totalHorasSemanal: totSem,
         totalHorasLapso: totLap
-      };
+      });
     });
     
     return result;
@@ -170,7 +188,7 @@ async function fetchDocentesListInternal(periodo) {
       const carga = cargasMap[doc.cedula] || (docNumKey ? cargasMap[docNumKey] : null);
       if (carga) {
         const fallbackEsp = (carga.materias || []).find(m => m.especialidadDestino && String(m.especialidadDestino).trim() !== '')?.especialidadDestino || '';
-        result.push({
+        result.push(stripSensitiveDocenteFields({
           ...doc,
           department: normalizeDepartmentName(doc.department),
           especialidad: (doc.especialidad && String(doc.especialidad).trim() !== '') ? doc.especialidad : fallbackEsp,
@@ -183,7 +201,7 @@ async function fetchDocentesListInternal(periodo) {
           totalHorasSemanal: carga.totalHorasSemanal || (carga.materias || []).reduce((s, m) => s + (parseInt(m.horasSemanal) || 0), 0),
           totalHorasLapso: carga.totalHorasLapso || (carga.materias || []).reduce((s, m) => s + (parseInt(m.horasLapso) || 0), 0),
           esCargaPlanificada: true
-        });
+        }));
       }
     }
     return result;
@@ -233,7 +251,7 @@ async function fetchDocentesListInternal(periodo) {
           ? 'Por Revisar'
           : (carga.status || 'Cerrado');
 
-        result.push({
+        result.push(stripSensitiveDocenteFields({
           ...doc,
           department: normalizeDepartmentName(doc.department),
           especialidad: (doc.especialidad && String(doc.especialidad).trim() !== '') ? doc.especialidad : fallbackEsp,
@@ -246,7 +264,7 @@ async function fetchDocentesListInternal(periodo) {
           totalHorasSemanal: cargaTotSem,
           totalHorasLapso: cargaTotLap,
           esCargaPlanificada: false
-        });
+        }));
       }
     }
     return result;
@@ -255,8 +273,8 @@ async function fetchDocentesListInternal(periodo) {
   return [];
 }
 
-// 1. GET /docentes
-router.get('/docentes', async (req, res) => {
+// 1. GET /docentes (Solo personal institucional autenticado)
+router.get('/docentes', requireStaffAuth, async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
@@ -546,10 +564,20 @@ router.post('/docentes/validar-portal', createRateLimiter(20, 10 * 60 * 1000, 'D
 
     const fichasLapsos = Array.from(mapLapsos.values()).sort((a, b) => b.periodo.localeCompare(a.periodo));
     const isFirstTime = !existingStaff.clave || String(existingStaff.clave).trim() === '';
+    const safeStaff = stripSensitiveDocenteFields(existingStaff);
+    const portalToken = generateToken({
+      id: existingStaff.id || 0,
+      username: existingStaff.cedula,
+      cedula: existingStaff.cedula,
+      name: `${existingStaff.nombres || ''} ${existingStaff.apellidos || ''}`.trim() || existingStaff.cedula,
+      role: 'DOCENTE_PORTAL',
+      department: existingStaff.department || 'Docencia'
+    });
 
     return res.json({
       success: true,
-      staff: existingStaff,
+      portalToken,
+      staff: safeStaff,
       fichasLapsos,
       isFirstTime
     });
@@ -613,7 +641,7 @@ router.post('/docentes/recuperar-clave', createRateLimiter(6, 15 * 60 * 1000, 'D
 });
 
 // 3.1 POST /docentes/cambiar-clave-portal (Autoservicio Seguro del Docente)
-router.post('/docentes/cambiar-clave-portal', createRateLimiter(15, 10 * 60 * 1000, 'Demasiados intentos de cambio de clave.'), async (req, res) => {
+router.post('/docentes/cambiar-clave-portal', requireAuth, createRateLimiter(15, 10 * 60 * 1000, 'Demasiados intentos de cambio de clave.'), async (req, res) => {
   try {
     const { cedula, newPassword } = req.body;
     if (!cedula || !newPassword) {
@@ -621,6 +649,9 @@ router.post('/docentes/cambiar-clave-portal', createRateLimiter(15, 10 * 60 * 10
     }
     const inputCed = String(cedula).trim();
     const inputNumbers = inputCed.replace(/\D/g, '');
+    if (!canAccessDocenteRecord(req.user, inputNumbers)) {
+      return res.status(403).json({ success: false, message: 'No está autorizado para modificar la contraseña de otro docente.' });
+    }
     const cleanPass = String(newPassword).trim();
 
     if (cleanPass.length < 4) {
@@ -653,7 +684,7 @@ router.post('/docentes/cambiar-clave-portal', createRateLimiter(15, 10 * 60 * 10
 });
 
 // 3.2 POST /docentes/portal-actualizar-ficha (Autoservicio del Docente para completar su Ficha)
-router.post('/docentes/portal-actualizar-ficha', async (req, res) => {
+router.post('/docentes/portal-actualizar-ficha', requireAuth, async (req, res) => {
   try {
     const { cedula, ...data } = req.body;
     if (!cedula) {
@@ -661,6 +692,9 @@ router.post('/docentes/portal-actualizar-ficha', async (req, res) => {
     }
     const inputCed = String(cedula).trim();
     const inputNumbers = inputCed.replace(/\D/g, '');
+    if (!canAccessDocenteRecord(req.user, inputNumbers)) {
+      return res.status(403).json({ success: false, message: 'No está autorizado para modificar la ficha de otro docente.' });
+    }
 
     const [rows] = await db.query(
       "SELECT * FROM docentes WHERE cedula = ? OR REPLACE(REPLACE(cedula, 'V-', ''), 'v-', '') = ? LIMIT 1",
@@ -669,6 +703,9 @@ router.post('/docentes/portal-actualizar-ficha', async (req, res) => {
 
     const doc = rows.length > 0 ? rows[0] : {};
     const isNew = rows.length === 0;
+    if (isNew && !STAFF_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Solo su Jefe de Departamento o Talento Humano puede registrar un docente nuevo.' });
+    }
 
     const cleanCedula = doc.cedula || (inputCed.startsWith('V-') ? inputCed : `V-${inputNumbers}`);
     const cleanNombres = sanitizeString(data.nombres !== undefined ? data.nombres : (doc.nombres || ''));
@@ -1119,10 +1156,13 @@ router.put('/docentes/carga', requireRole(['ADMIN', 'DOCENCIA', 'JEFE']), async 
 });
 
 // 7. GET /docentes/:cedula/historial
-router.get('/docentes/:cedula/historial', async (req, res) => {
+router.get('/docentes/:cedula/historial', requireAuth, async (req, res) => {
   try {
     const { cedula } = req.params;
     const bareCedula = String(cedula || '').trim().replace(/^[VEve]-?/, '');
+    if (!canAccessDocenteRecord(req.user, bareCedula)) {
+      return res.status(403).json({ success: false, error: 'No autorizado para consultar el historial de otro docente.' });
+    }
     const vCedula = `V-${bareCedula}`;
     const [rows] = await db.query(
       'SELECT * FROM cargas_historicas WHERE cedula_docente = ? OR cedula_docente = ? ORDER BY periodoAcademico DESC, fechaRegistro DESC',

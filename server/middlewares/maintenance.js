@@ -32,10 +32,16 @@ function maintenanceMiddleware(req, res, next) {
   const allowedPrefixes = [
     '/backup/maintenance-mode',
     '/api/backup/maintenance-mode',
+    '/login',
+    '/api/login',
     '/auth/login',
     '/api/auth/login',
     '/auth/google',
     '/api/auth/google',
+    '/config/login-bg',
+    '/api/config/login-bg',
+    '/config/flyer',
+    '/api/config/flyer',
     '/health',
     '/api/health'
   ];

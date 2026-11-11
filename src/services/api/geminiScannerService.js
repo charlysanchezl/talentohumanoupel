@@ -4,7 +4,8 @@
  */
 
 const getStoredToken = () => {
-  return typeof window !== 'undefined' ? localStorage.getItem('upel_auth_token') : null;
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('upel_auth_token') || sessionStorage.getItem('upel_portal_token');
 };
 
 const getApiBaseUrl = () => {

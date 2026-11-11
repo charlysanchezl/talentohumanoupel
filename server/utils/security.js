@@ -1,13 +1,41 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const SALT_ROUNDS = 10;
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production'
-  ? (() => {
-      console.warn('⚠️ AVISO DE SEGURIDAD: JWT_SECRET no definido en .env. Generando clave efímera de alta entropía.');
-      return crypto.randomBytes(32).toString('hex');
-    })()
-  : 'UPEL_SIGOA_TALENTO_HUMANO_DEV_SECRET_FALLBACK');
+
+const PLACEHOLDER_SECRETS = new Set([
+  '',
+  'coloque_aqui_su_clave_secreta_de_produccion_aleatoria',
+  'UPEL_SIGOA_TALENTO_HUMANO_DEV_SECRET_FALLBACK'
+]);
+
+function resolveJwtSecret() {
+  const envSecret = (process.env.JWT_SECRET || '').trim();
+  if (envSecret && !PLACEHOLDER_SECRETS.has(envSecret)) {
+    return envSecret;
+  }
+
+  const secretFilePath = path.join(__dirname, '../.jwt_secret');
+  try {
+    if (fs.existsSync(secretFilePath)) {
+      const persisted = fs.readFileSync(secretFilePath, 'utf8').trim();
+      if (persisted && persisted.length >= 32) {
+        return persisted;
+      }
+    }
+    const generated = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(secretFilePath, generated, { encoding: 'utf8', mode: 0o600 });
+    console.warn('⚠️ AVISO DE SEGURIDAD: JWT_SECRET no definido en .env. Se generó clave persistente de alta entropía en server/.jwt_secret.');
+    return generated;
+  } catch (err) {
+    console.warn('⚠️ AVISO DE SEGURIDAD: No se pudo persistir .jwt_secret, usando clave efímera en memoria.');
+    return crypto.randomBytes(32).toString('hex');
+  }
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 /**
@@ -48,7 +76,8 @@ function generateToken(user) {
     username: user.username,
     name: user.name,
     role: user.role,
-    department: user.department
+    department: user.department,
+    ...(user.cedula ? { cedula: user.cedula } : {})
   };
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }

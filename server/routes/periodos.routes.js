@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../db');
 const logger = require('../utils/logger');
-const { requireRole } = require('../middlewares/auth');
+const { requireRole, requireStaffAuth } = require('../middlewares/auth');
 const { logAction } = require('../services/auditService');
 const { invalidateDocentesCache } = require('../services/docentesCache.service');
 const { normalizeDepartmentName } = require('../utils/normalizer');
@@ -917,7 +917,7 @@ router.post('/periodos/activar', requireRole(['ADMIN', 'DOCENCIA']), async (req,
 });
 
 // MATERIAS HUÉRFANAS PARA UN PERÍODO
-router.get('/periodos/:nombre/huerfanas', async (req, res) => {
+router.get('/periodos/:nombre/huerfanas', requireStaffAuth, async (req, res) => {
   try {
     const { nombre } = req.params;
     const [catalogo] = await db.query('SELECT * FROM materias_catalogo ORDER BY nombre ASC');
@@ -957,7 +957,7 @@ router.get('/periodos/:nombre/huerfanas', async (req, res) => {
 });
 
 // CUADRO CONSOLIDADO DE NECESIDADES DOCENTES
-router.get('/periodos/:nombre/necesidades', async (req, res) => {
+router.get('/periodos/:nombre/necesidades', requireStaffAuth, async (req, res) => {
   try {
     const { nombre } = req.params;
     const [periodoRows] = await db.query('SELECT estado FROM periodos_academicos WHERE nombre = ?', [nombre]);

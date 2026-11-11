@@ -16,6 +16,8 @@ android/app/build/
 server/.env
 server/.env.local
 server/.env.*
+server/.jwt_secret
+*.jwt_secret
 *.local
 !.env.example
 !server/.env.example

@@ -31,22 +31,13 @@ function authenticateToken(req, res, next) {
   next();
 }
 
+const STAFF_ROLES = ['ADMIN', 'AUDITOR', 'DOCENCIA', 'JEFE'];
+
 /**
  * Middleware para exigir obligatoriamente un token JWT válido (401 Unauthorized)
  */
 function requireAuth(req, res, next) {
   if (!req.user) {
-    const auditor = req.body?.auditor || req.body?.queue?.[0]?.auditor;
-    if (auditor && (auditor.username || auditor.name)) {
-      req.user = {
-        id: auditor.id || 9999,
-        username: auditor.username || auditor.name,
-        name: auditor.name || auditor.username,
-        role: auditor.role || 'AUDITOR',
-        department: auditor.department || 'Docencia'
-      };
-      return next();
-    }
     return res.status(401).json({
       success: false,
       error: req.tokenExpired
@@ -55,6 +46,21 @@ function requireAuth(req, res, next) {
     });
   }
   next();
+}
+
+/**
+ * Middleware para exigir sesión de personal institucional (excluye tokens de portal docente)
+ */
+function requireStaffAuth(req, res, next) {
+  requireAuth(req, res, () => {
+    if (!STAFF_ROLES.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Acceso denegado: Se requiere una sesión institucional autorizada.'
+      });
+    }
+    next();
+  });
 }
 
 /**
@@ -79,5 +85,7 @@ function requireRole(allowedRoles) {
 module.exports = {
   authenticateToken,
   requireAuth,
-  requireRole
+  requireStaffAuth,
+  requireRole,
+  STAFF_ROLES
 };

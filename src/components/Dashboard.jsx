@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, AlertTriangle, CheckCircle, Clock, Download, Database, TrendingUp, MoreVertical, ChevronRight, ChevronDown, Image as ImageIcon, Eye, X, MapPin, FileText, FileSpreadsheet, Sparkles, CalendarOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { getStaffData, getCurrentUser, sedesInstitucionales, getInstitutionalHeaderSubtitle, getUsers, getCatalogoMaterias, getAcademicPeriodsList, splitDepartments, matchDepartment, API_URL } from '../data';
+import { getStaffData, getCurrentUser, getAuthHeaders, sedesInstitucionales, getInstitutionalHeaderSubtitle, getUsers, getCatalogoMaterias, getAcademicPeriodsList, splitDepartments, matchDepartment, API_URL } from '../data';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
 
 const Dashboard = () => {
@@ -628,7 +628,7 @@ const Dashboard = () => {
       
       const response = await fetch(`${API_URL}/migrate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ docentes: localData })
       });
       

@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  getStaffData, 
-  createStaff, 
   getRegistrationStatus, 
   getAcademicPeriodsList, 
   getLoginBgConfig, 
@@ -44,6 +42,7 @@ const PublicRegistration = () => {
 
   // Estados de autenticación y carga
   const [errorAuth, setErrorAuth] = useState('');
+  const [portalToken, setPortalToken] = useState(() => (typeof window !== 'undefined' ? sessionStorage.getItem('upel_portal_token') || '' : ''));
   const [registeredStaff, setRegisteredStaff] = useState(null);
   const [fichasLapsos, setFichasLapsos] = useState([]);
   const [selectedLapso, setSelectedLapso] = useState('');
@@ -133,6 +132,8 @@ const PublicRegistration = () => {
     setFirstLoginError('');
     setFichasLapsos([]);
     setSelectedLapso('');
+    setPortalToken('');
+    if (typeof window !== 'undefined') sessionStorage.removeItem('upel_portal_token');
   };
 
   const handleValidateCedula = async (e) => {
@@ -166,6 +167,10 @@ const PublicRegistration = () => {
       if (res.ok && data.success) {
         existingStaff = data.staff;
         isFirstTime = !!data.isFirstTime;
+        if (data.portalToken) {
+          setPortalToken(data.portalToken);
+          if (typeof window !== 'undefined') sessionStorage.setItem('upel_portal_token', data.portalToken);
+        }
         if (data.fichasLapsos && Array.isArray(data.fichasLapsos) && data.fichasLapsos.length > 0) {
           setFichasLapsos(data.fichasLapsos);
           const firstValidated = data.fichasLapsos.find(l => l.validadoPorJefe);
@@ -176,53 +181,8 @@ const PublicRegistration = () => {
         return;
       }
     } catch {
-      // Fallback local/offline en caso de corte de conexión al servidor
-      const staffList = await getStaffData();
-      existingStaff = staffList.find(s => {
-        const dbNumbers = String(s.cedula).replace(/\D/g, '');
-        return dbNumbers === inputNumbers;
-      });
-
-      if (existingStaff) {
-        const defaultClave = inputNumbers.length >= 4 ? inputNumbers.slice(-4) : inputNumbers;
-        const hasCustomClave = Boolean(existingStaff.clave && String(existingStaff.clave).trim() !== '');
-        const enteredClave = passwordInput.trim();
-
-        if (hasCustomClave) {
-          if (enteredClave !== String(existingStaff.clave).trim()) {
-            setErrorAuth('Contraseña incorrecta. Verifique sus datos e intente nuevamente.');
-            return;
-          }
-        } else {
-          if (enteredClave !== defaultClave) {
-            setErrorAuth('Contraseña incorrecta. Verifique sus datos e intente nuevamente.');
-            return;
-          }
-        }
-        isFirstTime = !hasCustomClave;
-        
-        const activePer = existingStaff.periodoAcademico || '2026-I';
-        const isValid = existingStaff.status === 'Validado' || existingStaff.status === 'Activo';
-        const fallbackList = [
-          {
-            periodo: activePer,
-            status: existingStaff.status || 'Por Revisar',
-            validadoPorJefe: isValid,
-            materias: isValid ? (existingStaff.materias || []) : [],
-            semanas: existingStaff.semanas || 15,
-            department: existingStaff.department,
-            sedeCentro: existingStaff.sedeCentro,
-            categoriaDocente: existingStaff.categoriaDocente,
-            dedicacion: existingStaff.dedicacion,
-            especialidad: existingStaff.especialidad
-          }
-        ];
-        setFichasLapsos(fallbackList);
-        setSelectedLapso(activePer);
-      } else {
-        setErrorAuth('Cédula no encontrada. Su Jefe de Departamento debe registrarlo en el sistema antes de que pueda llenar su ficha.');
-        return;
-      }
+      setErrorAuth('No se pudo conectar con el servidor para validar sus credenciales. Intente nuevamente.');
+      return;
     }
 
     if (existingStaff) {
@@ -270,10 +230,14 @@ const PublicRegistration = () => {
     }
 
     const cleanPass = newPasswordInput.trim();
+    const activeToken = portalToken || (typeof window !== 'undefined' ? sessionStorage.getItem('upel_portal_token') : '') || '';
     try {
       const res = await fetch('/api/docentes/cambiar-clave-portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {})
+        },
         body: JSON.stringify({ cedula: registeredStaff.cedula, newPassword: cleanPass })
       });
       const data = await res.json();
@@ -282,15 +246,14 @@ const PublicRegistration = () => {
         return;
       }
     } catch (netErr) {
-      console.warn('Servidor no alcanzable de inmediato, persistiendo clave local:', netErr.message);
+      setFirstLoginError('No se pudo conectar con el servidor para actualizar la contraseña. Intente nuevamente.');
+      return;
     }
 
     const updated = {
-      ...registeredStaff,
-      clave: cleanPass
+      ...registeredStaff
     };
 
-    await createStaff(updated);
     setRegisteredStaff(updated);
 
     if (!isExpedienteCompleto(updated)) {
@@ -343,56 +306,15 @@ const PublicRegistration = () => {
         body: JSON.stringify({ cedula: inputCed, email: inputMail })
       });
       const data = await res.json();
+      setIsForgotLoading(false);
       if (res.ok && data.success) {
-        setIsForgotLoading(false);
         setForgotSuccess(data.message);
-        return;
-      } else if (data.message && res.ok) {
-        setIsForgotLoading(false);
-        setForgotError(data.message);
-        return;
+      } else {
+        setForgotError(data.message || 'No se pudo validar la solicitud de recuperación.');
       }
     } catch {
-      // Fallback local
-    }
-
-    try {
-      const staffList = await getStaffData();
-      const staff = staffList.find(s => String(s.cedula).replace(/\D/g, '') === inputCed);
-
-      if (!staff) {
-        setIsForgotLoading(false);
-        setForgotError('Cédula no encontrada en el sistema.');
-        return;
-      }
-
-      const personalEmail = (staff.correo || '').trim().toLowerCase();
-      const instEmail = (staff.correoInstitucional || '').trim().toLowerCase();
-
-      if (!personalEmail && !instEmail) {
-        setIsForgotLoading(false);
-        setForgotError('Su ficha no tiene un correo electrónico registrado. Por favor comuníquese con la Subdirección de Docencia o su Jefe de Departamento para restablecer su acceso.');
-        return;
-      }
-
-      if (inputMail !== personalEmail && inputMail !== instEmail) {
-        setIsForgotLoading(false);
-        setForgotError('El correo ingresado no coincide con el registrado en su ficha.');
-        return;
-      }
-
-      const updated = {
-        ...staff,
-        clave: ''
-      };
-      await createStaff(updated);
-
-      const default4 = inputCed.length >= 4 ? inputCed.slice(-4) : inputCed;
       setIsForgotLoading(false);
-      setForgotSuccess(`¡Identidad verificada exitosamente! Su contraseña ha sido restablecida a los últimos 4 dígitos de su cédula (${default4}). Ahora puede ingresar al portal y el sistema le solicitará configurar su nueva contraseña.`);
-    } catch {
-      setIsForgotLoading(false);
-      setForgotError('Ocurrió un error al procesar la solicitud. Intente nuevamente.');
+      setForgotError('Ocurrió un error al conectar con el servidor. Intente nuevamente.');
     }
   };
 
@@ -450,54 +372,38 @@ const PublicRegistration = () => {
       return;
     }
 
-    const staffList = await getStaffData();
-    const existingIndex = staffList.findIndex(s => s.cedula === formData.cedula);
+    const baseStaff = registeredStaff || {};
+    const updatedStaff = {
+      ...baseStaff,
+      ...formData,
+      materias: baseStaff.materias || [],
+      department: baseStaff.department || formData.department,
+      sedeCentro: baseStaff.sedeCentro || formData.sedeCentro,
+      periodoAcademico: baseStaff.periodoAcademico || formData.periodoAcademico,
+      status: baseStaff.status === 'Activo' ? 'Activo' : 'Por Revisar'
+    };
 
-    if (existingIndex >= 0) {
-      const updatedStaff = { ...staffList[existingIndex], ...formData };
-      updatedStaff.materias = staffList[existingIndex].materias || [];
-      if (staffList[existingIndex].department) {
-        updatedStaff.department = staffList[existingIndex].department;
+    const activeToken = portalToken || (typeof window !== 'undefined' ? sessionStorage.getItem('upel_portal_token') : '') || '';
+    try {
+      const res = await fetch('/api/docentes/portal-actualizar-ficha', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {})
+        },
+        body: JSON.stringify(updatedStaff)
+      });
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok || !resData.success) {
+        alert(resData.message || resData.error || 'No se pudo actualizar su ficha en el servidor. Inicie sesión nuevamente en el portal.');
+        return;
       }
-      if (staffList[existingIndex].sedeCentro) {
-        updatedStaff.sedeCentro = staffList[existingIndex].sedeCentro;
-      }
-      if (staffList[existingIndex].periodoAcademico) {
-        updatedStaff.periodoAcademico = staffList[existingIndex].periodoAcademico;
-      }
-      updatedStaff.status = staffList[existingIndex].status === 'Activo' ? 'Activo' : 'Por Revisar';
-      
-      try {
-        await fetch('/api/docentes/portal-actualizar-ficha', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedStaff)
-        });
-      } catch (err) {
-        console.warn('Error al sincronizar ficha con el backend:', err);
-      }
-
-      await createStaff(updatedStaff);
-    } else {
-      const newStaff = {
-        ...formData,
-        materias: [],
-        status: 'Por Revisar',
-        id: Date.now().toString()
-      };
-      try {
-        await fetch('/api/docentes/portal-actualizar-ficha', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newStaff)
-        });
-      } catch (err) {
-        console.warn('Error al registrar nuevo docente en backend:', err);
-      }
-      await createStaff(newStaff);
+      setRegisteredStaff(updatedStaff);
+      setStep(3);
+    } catch (err) {
+      console.warn('Error al sincronizar ficha con el backend:', err);
+      alert('Error de conexión con el servidor al guardar la ficha. Por favor intente nuevamente.');
     }
-
-    setStep(3);
   };
 
   // BLOQUEO ESTRICTO POR MODO MANTENIMIENTO

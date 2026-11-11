@@ -33,15 +33,17 @@ function getStoredMailConfig() {
   };
 }
 
-// 1. Obtener configuración de correo (con contraseña enmascarada)
-router.get('/mail-config', (req, res) => {
+// 1. Obtener configuración de correo (con contraseña y API Key enmascaradas)
+router.get('/mail-config', requireRole(['ADMIN', 'DOCENCIA', 'JEFE', 'AUDITOR']), (req, res) => {
   const config = getStoredMailConfig();
   res.json({
     success: true,
     config: {
       ...config,
       smtpPass: config.smtpPass ? '********' : '',
-      hasPass: !!config.smtpPass
+      resendApiKey: config.resendApiKey ? '********' : '',
+      hasPass: !!config.smtpPass,
+      hasResendKey: !!config.resendApiKey
     }
   });
 });
@@ -59,7 +61,7 @@ router.post('/mail-config', requireRole('ADMIN'), async (req, res) => {
       smtpUser: (smtpUser !== undefined ? smtpUser : current.smtpUser).trim(),
       smtpPass: (smtpPass && smtpPass !== '********') ? smtpPass.trim() : current.smtpPass,
       smtpFrom: (smtpFrom !== undefined ? smtpFrom : current.smtpFrom).trim(),
-      resendApiKey: (resendApiKey !== undefined ? resendApiKey : current.resendApiKey).trim()
+      resendApiKey: (resendApiKey !== undefined && resendApiKey !== '********') ? resendApiKey.trim() : current.resendApiKey
     };
 
     const cfgPath = path.join(__dirname, '../mail_config.json');

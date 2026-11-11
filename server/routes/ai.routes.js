@@ -10,12 +10,13 @@ const router = express.Router();
 const logger = require('../utils/logger');
 const { extractDocumentData } = require('../services/geminiService');
 const { logAction } = require('../services/auditService');
+const { requireAuth, requireRole } = require('../middlewares/auth');
 
 /**
  * POST /api/ai/configure-key
  * Guarda la clave GEMINI_API_KEY en server/.env y la activa en memoria inmediatamente.
  */
-router.post('/ai/configure-key', async (req, res) => {
+router.post('/ai/configure-key', requireRole('ADMIN'), async (req, res) => {
   try {
     const { apiKey } = req.body || {};
     if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 10) {
@@ -64,7 +65,7 @@ router.post('/ai/configure-key', async (req, res) => {
  * Recibe imagen en base64 de un documento (Cédula, Título, Constancia)
  * y devuelve los datos extraídos en JSON estructurado.
  */
-router.post('/ai/scan-document', async (req, res) => {
+router.post('/ai/scan-document', requireAuth, async (req, res) => {
   try {
     const { imageBase64, mimeType, documentHint, apiKey } = req.body;
 
