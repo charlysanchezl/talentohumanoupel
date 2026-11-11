@@ -5,6 +5,8 @@ const path = require('path');
 const db = require('../db');
 const { requireRole } = require('../middlewares/auth');
 const { logAction } = require('../services/auditService');
+const { invalidateDocentesCache } = require('../services/docentesCache.service');
+const { createStreamWriter, streamSqlDump, restoreDatabaseSnapshot } = require('../services/backupDump.service');
 
 const MAINTENANCE_CONFIG_FILE = path.join(__dirname, '../maintenance_config.json');
 
@@ -92,78 +94,31 @@ router.get('/backup/stats', requireRole(['ADMIN', 'AUDITOR']), async (req, res) 
 router.get('/backup/sql', requireRole('ADMIN'), async (req, res) => {
   try {
     const adminUser = req.user?.username || req.user?.name || 'Administrador';
-    const [tableListRes] = await db.query('SHOW FULL TABLES');
-    const baseTables = tableListRes.filter(row => Object.values(row)[1] === 'BASE TABLE').map(row => Object.values(row)[0]);
-    const views = tableListRes.filter(row => Object.values(row)[1] === 'VIEW').map(row => Object.values(row)[0]);
-    const now = new Date();
-    const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-
-    let sqlDump = `-- ========================================================\n`;
-    sqlDump += `-- UPEL SIGOA - BÓVEDA DE RESPALDO INSTITUCIONAL (3NF)\n`;
-    sqlDump += `-- Generado: ${now.toLocaleString('es-VE')} por ${adminUser}\n`;
-    sqlDump += `-- Servidor: UPEL IPRGR Core MySQL/MariaDB\n`;
-    sqlDump += `-- Base de Datos: upel_talento_humano (${baseTables.length} tablas base + ${views.length} vistas)\n`;
-    sqlDump += `-- ========================================================\n\n`;
-    sqlDump += `SET FOREIGN_KEY_CHECKS = 0;\n`;
-    sqlDump += `SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";\n`;
-    sqlDump += `SET NAMES utf8mb4;\n\n`;
-
-    for (const table of baseTables) {
-      const [createRes] = await db.query(`SHOW CREATE TABLE \`${table}\``);
-      const createTableSql = createRes[0]['Create Table'] || Object.values(createRes[0])[1];
-      
-      sqlDump += `-- --------------------------------------------------------\n`;
-      sqlDump += `-- Estructura de tabla para la tabla \`${table}\`\n`;
-      sqlDump += `-- --------------------------------------------------------\n`;
-      sqlDump += `DROP TABLE IF EXISTS \`${table}\`;\n`;
-      sqlDump += `${createTableSql};\n\n`;
-
-      const [rows] = await db.query(`SELECT * FROM \`${table}\``);
-      if (rows.length > 0) {
-        sqlDump += `-- Volcado de datos para la tabla \`${table}\` (${rows.length} registros)\n`;
-        const columns = Object.keys(rows[0]).map(c => `\`${c}\``).join(', ');
-        
-        for (let i = 0; i < rows.length; i += 50) {
-          const chunk = rows.slice(i, i + 50);
-          const valuesList = chunk.map(row => {
-            const vals = Object.values(row).map(val => {
-              if (val === null || val === undefined) return 'NULL';
-              if (val instanceof Date) return db.escape(val.toISOString().slice(0, 19).replace('T', ' '));
-              return db.escape(val);
-            });
-            return `(${vals.join(', ')})`;
-          }).join(',\n');
-          
-          sqlDump += `INSERT INTO \`${table}\` (${columns}) VALUES\n${valuesList};\n`;
-        }
-        sqlDump += `\n`;
-      }
-    }
-
-    for (const viewName of views) {
-      const [createRes] = await db.query(`SHOW CREATE VIEW \`${viewName}\``);
-      const createViewSql = createRes[0]['Create View'] || Object.values(createRes[0])[1];
-      sqlDump += `-- --------------------------------------------------------\n`;
-      sqlDump += `-- Estructura para la vista \`${viewName}\`\n`;
-      sqlDump += `-- --------------------------------------------------------\n`;
-      sqlDump += `DROP TABLE IF EXISTS \`${viewName}\`;\n`;
-      sqlDump += `DROP VIEW IF EXISTS \`${viewName}\`;\n`;
-      sqlDump += `${createViewSql};\n\n`;
-    }
-
-    sqlDump += `SET FOREIGN_KEY_CHECKS = 1;\n`;
-    sqlDump += `-- FIN DEL RESPALDO UPEL SIGOA\n`;
+    const [tableListRes] = await db.nativeQuery('SHOW FULL TABLES');
+    const baseTablesCount = tableListRes.filter(row => Object.values(row)[1] === 'BASE TABLE').length;
+    const viewsCount = tableListRes.filter(row => Object.values(row)[1] === 'VIEW').length;
+    const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
     try {
-      await logAction(adminUser, 'ADMIN', 'Generación de Respaldo SQL', `Descargado backup .sql con ${baseTables.length} tablas 3NF y ${views.length} vistas.`, req);
+      await logAction(adminUser, 'ADMIN', 'Generación de Respaldo SQL', `Descargado backup .sql con ${baseTablesCount} tablas 3NF y ${viewsCount} vistas.`, req);
     } catch (e) {}
 
     res.setHeader('Content-Type', 'application/sql; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="upel_sigoa_backup_${dateStr}.sql"`);
-    res.send(sqlDump);
+
+    await streamSqlDump({
+      write: createStreamWriter(res),
+      dbExecutor: db,
+      userLabel: adminUser
+    });
+    res.end();
   } catch (err) {
     console.error('Error generando respaldo SQL:', err);
-    res.status(500).json({ success: false, error: err.message });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: err.message });
+    } else {
+      res.destroy(err);
+    }
   }
 });
 
@@ -200,73 +155,38 @@ router.get('/backup/json', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-// 4. Restauración segura desde snapshot JSON (Exclusivo Administrador)
+// 4. Restauración segura desde snapshot JSON (soporta formato físico 3NF y lógico legado)
 router.post('/backup/restore', requireRole('ADMIN'), async (req, res) => {
+  const adminUser = req.user?.username || req.user?.name || 'Administrador';
+  let connection;
   try {
-    const adminUser = req.user?.username || req.user?.name || 'Administrador';
     const { payload } = req.body;
+    connection = await db.getConnection();
+    const restored = await restoreDatabaseSnapshot(connection, payload);
 
-    if (!payload || !payload.data || !payload.data.docentes) {
-      return res.status(400).json({ success: false, error: 'El archivo de respaldo no tiene una estructura válida de UPEL SIGOA.' });
-    }
-
-    const { data } = payload;
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
+    invalidateDocentesCache(true);
 
     try {
-      await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+      await logAction(
+        adminUser,
+        'ADMIN',
+        'Restauración de Base de Datos',
+        `Se restauraron (${restored.mode.toUpperCase()}) ${restored.docentes} docentes y ${restored.docentesMaterias} asignaciones.`,
+        req
+      );
+    } catch (e) {}
 
-      if (Array.isArray(data.docentes)) {
-        await connection.query('TRUNCATE TABLE docentes');
-        for (const d of data.docentes) {
-          const keys = Object.keys(d).map(k => `\`${k}\``).join(', ');
-          const vals = Object.values(d).map(v => db.escape(v)).join(', ');
-          await connection.query(`INSERT INTO docentes (${keys}) VALUES (${vals})`);
-        }
-      }
-
-      if (Array.isArray(data.docentes_materias)) {
-        await connection.query('TRUNCATE TABLE docentes_materias');
-        for (const m of data.docentes_materias) {
-          const keys = Object.keys(m).map(k => `\`${k}\``).join(', ');
-          const vals = Object.values(m).map(v => db.escape(v)).join(', ');
-          await connection.query(`INSERT INTO docentes_materias (${keys}) VALUES (${vals})`);
-        }
-      }
-
-      if (Array.isArray(data.materias_catalogo)) {
-        await connection.query('TRUNCATE TABLE materias_catalogo');
-        for (const c of data.materias_catalogo) {
-          const keys = Object.keys(c).map(k => `\`${k}\``).join(', ');
-          const vals = Object.values(c).map(v => db.escape(v)).join(', ');
-          await connection.query(`INSERT INTO materias_catalogo (${keys}) VALUES (${vals})`);
-        }
-      }
-
-      await connection.query('SET FOREIGN_KEY_CHECKS = 1');
-      await connection.commit();
-      connection.release();
-
-      await logAction(adminUser, 'ADMIN', 'Restauración de Base de Datos', `Se restauraron ${data.docentes?.length || 0} docentes y ${data.docentes_materias?.length || 0} asignaciones.`, req);
-
-      res.json({
-        success: true,
-        message: 'Base de datos restaurada con éxito.',
-        restored: {
-          docentes: data.docentes?.length || 0,
-          docentesMaterias: data.docentes_materias?.length || 0,
-          materiasCatalogo: data.materias_catalogo?.length || 0
-        }
-      });
-    } catch (txErr) {
-      await connection.rollback();
-      connection.release();
-      throw txErr;
-    }
+    res.json({
+      success: true,
+      message: 'Base de datos restaurada con éxito.',
+      restored
+    });
   } catch (err) {
     console.error('Error restaurando base de datos:', err);
-    res.status(500).json({ success: false, error: err.message });
+    const status = err.statusCode || 500;
+    res.status(status).json({ success: false, error: err.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 

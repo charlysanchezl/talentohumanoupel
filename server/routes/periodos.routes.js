@@ -8,149 +8,87 @@ const { requireRole, requireStaffAuth } = require('../middlewares/auth');
 const { logAction } = require('../services/auditService');
 const { invalidateDocentesCache } = require('../services/docentesCache.service');
 const { normalizeDepartmentName } = require('../utils/normalizer');
+const { writeSqlDumpToFile } = require('../services/backupDump.service');
 
-// HELPER PARA VOLCADO SQL INSTITUCIONAL (Bóveda y Respaldos Preventivos)
-const generateSqlDumpString = async () => {
-  const [tableListRes] = await db.query('SHOW FULL TABLES');
-  const baseTables = tableListRes.filter(row => Object.values(row)[1] === 'BASE TABLE').map(row => Object.values(row)[0]);
-  const views = tableListRes.filter(row => Object.values(row)[1] === 'VIEW').map(row => Object.values(row)[0]);
-  const now = new Date();
-  let sqlDump = `-- ========================================================\n`;
-  sqlDump += `-- UPEL SIGOA - BÓVEDA DE RESPALDO INSTITUCIONAL (3NF)\n`;
-  sqlDump += `-- Generado: ${now.toLocaleString('es-VE')}\n`;
-  sqlDump += `-- Servidor: UPEL IPRGR Core MySQL/MariaDB\n`;
-  sqlDump += `-- ========================================================\n\n`;
-  sqlDump += `SET FOREIGN_KEY_CHECKS = 0;\n`;
-  sqlDump += `SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";\n`;
-  sqlDump += `SET NAMES utf8mb4;\n\n`;
-
-  for (const table of baseTables) {
-    try {
-      const [createRes] = await db.query(`SHOW CREATE TABLE \`${table}\``);
-      if (createRes && createRes[0]) {
-        const createTableSql = createRes[0]['Create Table'] || Object.values(createRes[0])[1];
-        sqlDump += `-- --------------------------------------------------------\n`;
-        sqlDump += `-- Estructura de tabla para \`${table}\`\n`;
-        sqlDump += `-- --------------------------------------------------------\n`;
-        sqlDump += `DROP TABLE IF EXISTS \`${table}\`;\n`;
-        sqlDump += `${createTableSql};\n\n`;
-
-        const [rows] = await db.query(`SELECT * FROM \`${table}\``);
-        if (rows.length > 0) {
-          sqlDump += `-- Volcado de datos para la tabla \`${table}\` (${rows.length} registros)\n`;
-          const columns = Object.keys(rows[0]).map(c => `\`${c}\``).join(', ');
-          
-          for (let i = 0; i < rows.length; i += 50) {
-            const chunk = rows.slice(i, i + 50);
-            const valuesList = chunk.map(row => {
-              const vals = Object.values(row).map(val => {
-                if (val === null || val === undefined) return 'NULL';
-                if (val instanceof Date) return db.escape(val.toISOString().slice(0, 19).replace('T', ' '));
-                return db.escape(val);
-              });
-              return `(${vals.join(', ')})`;
-            }).join(',\n');
-            
-            sqlDump += `INSERT INTO \`${table}\` (${columns}) VALUES\n${valuesList};\n`;
-          }
-          sqlDump += `\n`;
-        }
-      }
-    } catch (tblErr) {
-      console.error(`Error procesando tabla ${table} en backup:`, tblErr.message);
-    }
-  }
-
-  for (const viewName of views) {
-    try {
-      const [createRes] = await db.query(`SHOW CREATE VIEW \`${viewName}\``);
-      if (createRes && createRes[0]) {
-        const createViewSql = createRes[0]['Create View'] || Object.values(createRes[0])[1];
-        sqlDump += `-- --------------------------------------------------------\n`;
-        sqlDump += `-- Estructura para la vista \`${viewName}\`\n`;
-        sqlDump += `-- --------------------------------------------------------\n`;
-        sqlDump += `DROP TABLE IF EXISTS \`${viewName}\`;\n`;
-        sqlDump += `DROP VIEW IF EXISTS \`${viewName}\`;\n`;
-        sqlDump += `${createViewSql};\n\n`;
-      }
-    } catch (vwErr) {}
-  }
-
-  sqlDump += `SET FOREIGN_KEY_CHECKS = 1;\n`;
-  sqlDump += `-- FIN DEL RESPALDO UPEL SIGOA\n`;
-  return sqlDump;
-};
-
-// HELPER PARA CIERRE SEGURO DE LAPSO (RESPALDA 100% CARGA DOCENTE Y ASIGNATURAS)
+// HELPER PARA CIERRE SEGURO DE LAPSO (TRANSACCIÓN ACID: RESGUARDA 100% CARGA DOCENTE Y ASIGNATURAS)
 async function cerrarPeriodoSeguro(periodoObj, auditor = null, motivo = 'Cierre oficial') {
   if (!periodoObj || periodoObj.estado === 'CERRADO') return;
 
-  // 1. Verificar si este período ya cuenta con resguardo consolidado en cargas_historicas
-  const [existingCargas] = await db.query(
-    'SELECT COUNT(*) as cnt, COALESCE(SUM(totalHorasSemanal), 0) as sumHoras FROM cargas_historicas WHERE periodoAcademico = ?',
-    [periodoObj.nombre]
-  );
-  const existingCount = parseInt(existingCargas[0]?.cnt || 0);
-  const existingHours = parseInt(existingCargas[0]?.sumHoras || 0);
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
 
-  const [currentDocentes] = await db.query('SELECT * FROM docentes');
-  const [currentMaterias] = await db.query('SELECT * FROM docentes_materias');
-  
-  // Calcular volumen de la tabla en vivo actual
-  const currentTotalHours = currentMaterias.reduce((acc, m) => acc + (parseInt(m.horasSemanal) || 0), 0);
+    // 1. Verificar si este período ya cuenta con resguardo consolidado en cargas_historicas
+    const [existingCargas] = await conn.query(
+      'SELECT COUNT(*) as cnt, COALESCE(SUM(totalHorasSemanal), 0) as sumHoras FROM cargas_historicas WHERE periodoAcademico = ?',
+      [periodoObj.nombre]
+    );
+    const existingCount = parseInt(existingCargas[0]?.cnt || 0);
+    const existingHours = parseInt(existingCargas[0]?.sumHoras || 0);
 
-  // BLINDAJE SENIOR: Si el histórico ya tiene carga consolidada y la tabla en caliente tiene menos del 50% de horas
-  // (por ejemplo, porque docentes_materias ya pasó al siguiente período o está limpia), PROTEGEMOS el histórico.
-  if (existingCount > 0 && existingHours > 50 && currentTotalHours < existingHours * 0.5) {
-    console.warn(`[Cierre Seguro] El período ${periodoObj.nombre} ya posee resguardo histórico consolidado (${existingHours} hrs en ${existingCount} docentes). Se preserva la data histórica y se omite sobreescritura destructiva.`);
-  } else {
-    // Solo actualizamos o insertamos si la carga actual es legítima y válida
-    const matMap = {};
-    for (const m of currentMaterias) {
-      if (!matMap[m.docente_cedula]) matMap[m.docente_cedula] = [];
-      matMap[m.docente_cedula].push(m);
+    const [currentDocentes] = await conn.query('SELECT * FROM docentes');
+    const [currentMaterias] = await conn.query('SELECT * FROM docentes_materias');
+
+    // Calcular volumen de la tabla en vivo actual
+    const currentTotalHours = currentMaterias.reduce((acc, m) => acc + (parseInt(m.horasSemanal) || 0), 0);
+
+    // BLINDAJE SENIOR: Si el histórico ya tiene carga consolidada y la tabla en caliente tiene menos del 50% de horas
+    // (por ejemplo, porque docentes_materias ya pasó al siguiente período o está limpia), PROTEGEMOS el histórico.
+    if (existingCount > 0 && existingHours > 50 && currentTotalHours < existingHours * 0.5) {
+      console.warn(`[Cierre Seguro] El período ${periodoObj.nombre} ya posee resguardo histórico consolidado (${existingHours} hrs en ${existingCount} docentes). Se preserva la data histórica y se omite sobreescritura destructiva.`);
+    } else {
+      const matMap = {};
+      for (const m of currentMaterias) {
+        if (!matMap[m.docente_cedula]) matMap[m.docente_cedula] = [];
+        matMap[m.docente_cedula].push(m);
+      }
+
+      for (const d of currentDocentes) {
+        const dMats = matMap[d.cedula] || [];
+        const totSem = dMats.reduce((acc, m) => acc + (parseInt(m.horasSemanal) || 0), 0);
+        const totLap = dMats.reduce((acc, m) => acc + (parseInt(m.horasLapso) || 0), 0);
+
+        await conn.query(`
+          INSERT INTO cargas_historicas 
+            (cedula_docente, periodoAcademico, department, status, semanas, fechaDesde, fechaHasta, materias, totalHorasSemanal, totalHorasLapso)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            department = VALUES(department),
+            status = VALUES(status),
+            semanas = VALUES(semanas),
+            fechaDesde = VALUES(fechaDesde),
+            fechaHasta = VALUES(fechaHasta),
+            materias = IF(VALUES(totalHorasSemanal) > 0, VALUES(materias), materias),
+            totalHorasSemanal = IF(VALUES(totalHorasSemanal) > 0, VALUES(totalHorasSemanal), totalHorasSemanal),
+            totalHorasLapso = IF(VALUES(totalHorasLapso) > 0, VALUES(totalHorasLapso), totalHorasLapso)
+        `, [
+          d.cedula,
+          periodoObj.nombre,
+          d.department,
+          d.status || 'Validado',
+          d.semanas || periodoObj.semanas || 15,
+          d.fechaDesde || periodoObj.fechaDesde || '',
+          d.fechaHasta || periodoObj.fechaHasta || '',
+          JSON.stringify(dMats),
+          totSem,
+          totLap
+        ]);
+      }
     }
 
-    for (const d of currentDocentes) {
-      const dMats = matMap[d.cedula] || [];
-      const totSem = dMats.reduce((acc, m) => acc + (parseInt(m.horasSemanal) || 0), 0);
-      const totLap = dMats.reduce((acc, m) => acc + (parseInt(m.horasLapso) || 0), 0);
+    // 2. Marcar período saliente como CERRADO de forma atómica
+    await conn.query("UPDATE periodos_academicos SET estado = 'CERRADO', fechaCierre = CURRENT_TIMESTAMP WHERE id = ?", [periodoObj.id]);
+    await conn.query("UPDATE periodos_academicos_v3 SET estado = 'CERRADO' WHERE nombre = ?", [periodoObj.nombre]).catch(() => {});
 
-      await db.query(`
-        INSERT INTO cargas_historicas 
-          (cedula_docente, periodoAcademico, department, status, semanas, fechaDesde, fechaHasta, materias, totalHorasSemanal, totalHorasLapso)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-          department = VALUES(department),
-          status = VALUES(status),
-          semanas = VALUES(semanas),
-          fechaDesde = VALUES(fechaDesde),
-          fechaHasta = VALUES(fechaHasta),
-          materias = IF(VALUES(totalHorasSemanal) > 0, VALUES(materias), materias),
-          totalHorasSemanal = IF(VALUES(totalHorasSemanal) > 0, VALUES(totalHorasSemanal), totalHorasSemanal),
-          totalHorasLapso = IF(VALUES(totalHorasLapso) > 0, VALUES(totalHorasLapso), totalHorasLapso)
-      `, [
-        d.cedula,
-        periodoObj.nombre,
-        d.department,
-        d.status || 'Validado',
-        d.semanas || periodoObj.semanas || 15,
-        d.fechaDesde || periodoObj.fechaDesde || '',
-        d.fechaHasta || periodoObj.fechaHasta || '',
-        JSON.stringify(dMats),
-        totSem,
-        totLap
-      ]);
-    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    throw err;
+  } finally {
+    conn.release();
   }
 
-  // 2. Marcar período saliente como CERRADO
-  await db.query("UPDATE periodos_academicos SET estado = 'CERRADO', fechaCierre = CURRENT_TIMESTAMP WHERE id = ?", [periodoObj.id]);
-  try {
-    await db.query("UPDATE periodos_academicos_v3 SET estado = 'CERRADO' WHERE nombre = ?", [periodoObj.nombre]);
-  } catch (v3Err) {}
-
-  // 3. Registrar auditoría institucional
+  // 3. Registrar auditoría institucional e invalidar caché solo tras confirmar el commit
   const auditUser = auditor?.username || 'Sistema Automático';
   const auditRole = auditor?.role || 'ADMIN';
   await logAction(
@@ -696,8 +634,7 @@ router.post('/periodos/activar', requireRole(['ADMIN', 'DOCENCIA']), async (req,
       const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const fileName = `auto_pre_activacion_${prevActive ? prevActive.nombre : 'prev'}_a_${target.nombre}_${dateStr}.sql`;
       const fullPath = path.join(backupDir, fileName);
-      const sqlContent = await generateSqlDumpString();
-      fs.writeFileSync(fullPath, sqlContent, 'utf8');
+      await writeSqlDumpToFile(fullPath, { userLabel: auditor?.username || 'Sistema Automático' });
       autoBackupName = fileName;
 
       await logAction(

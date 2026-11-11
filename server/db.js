@@ -29,10 +29,42 @@ const pool = mysql.createPool({
 
 const promisePool = pool.promise();
 
+// Garantiza que GROUP_CONCAT no se trunque al reconstruir cargas históricas en MySQL (default 1024 B)
+pool.on('connection', (rawConn) => {
+  rawConn.query('SET SESSION group_concat_max_len = 4194304', (err) => {
+    if (err) {
+      console.warn('Aviso ajustando group_concat_max_len:', err.message);
+    }
+  });
+});
+
 // Auto-inicializar la tabla atómica de cargas históricas (1FN)
 adapter.initCargasHistoricas1NF(promisePool).catch(err => {
   // Aviso silencioso si MySQL aún no está listo al requerir el módulo
 });
+
+function shouldRethrowInterceptionError(sql) {
+  if (typeof sql !== 'string') return false;
+  const upper = sql.trim().toUpperCase();
+  const isWrite = upper.startsWith('INSERT') || upper.startsWith('UPDATE') || upper.startsWith('DELETE') || upper.startsWith('TRUNCATE');
+  const isVirtualTable = /\b(?:DOCENTES|DOCENTES_MATERIAS|MATERIAS_CATALOGO|PERIODOS_ACADEMICOS)\b(?!_)/i.test(sql);
+  return isWrite || isVirtualTable;
+}
+
+async function executeWithInterception(executor, origFn, sql, values, contextLabel) {
+  if (isTargetQuery(sql)) {
+    try {
+      const intercepted = await handleInterceptedQuery(executor, sql, values);
+      if (intercepted !== null) return intercepted;
+    } catch (err) {
+      console.error(`Aviso en intercepción 3NF (${contextLabel}):`, err.message);
+      if (shouldRethrowInterceptionError(sql)) {
+        throw err;
+      }
+    }
+  }
+  return origFn(sql, values);
+}
 
 // Envolver una conexión obtenida del pool para interceptar mutaciones hacia 3NF
 function wrapConnection(conn) {
@@ -40,31 +72,10 @@ function wrapConnection(conn) {
   const origExecute = conn.execute ? conn.execute.bind(conn) : origQuery;
 
   conn.nativeQuery = origQuery;
-
-  conn.query = async function(sql, values) {
-    if (isTargetQuery(sql)) {
-      try {
-        const intercepted = await handleInterceptedQuery(conn, sql, values);
-        if (intercepted !== null) return intercepted;
-      } catch (err) {
-        console.error('Aviso en intercepción 3NF (conn.query):', err.message);
-      }
-    }
-    return origQuery(sql, values);
-  };
+  conn.query = (sql, values) => executeWithInterception(conn, origQuery, sql, values, 'conn.query');
 
   if (conn.execute) {
-    conn.execute = async function(sql, values) {
-      if (isTargetQuery(sql)) {
-        try {
-          const intercepted = await handleInterceptedQuery(conn, sql, values);
-          if (intercepted !== null) return intercepted;
-        } catch (err) {
-          console.error('Aviso en intercepción 3NF (conn.execute):', err.message);
-        }
-      }
-      return origExecute(sql, values);
-    };
+    conn.execute = (sql, values) => executeWithInterception(conn, origExecute, sql, values, 'conn.execute');
   }
 
   return conn;
@@ -76,31 +87,10 @@ const origPoolExecute = promisePool.execute ? promisePool.execute.bind(promisePo
 const origGetConnection = promisePool.getConnection.bind(promisePool);
 
 promisePool.nativeQuery = origPoolQuery;
-
-promisePool.query = async function(sql, values) {
-  if (isTargetQuery(sql)) {
-    try {
-      const intercepted = await handleInterceptedQuery(promisePool, sql, values);
-      if (intercepted !== null) return intercepted;
-    } catch (err) {
-      console.error('Aviso en intercepción 3NF (pool.query):', err.message);
-    }
-  }
-  return origPoolQuery(sql, values);
-};
+promisePool.query = (sql, values) => executeWithInterception(promisePool, origPoolQuery, sql, values, 'pool.query');
 
 if (promisePool.execute) {
-  promisePool.execute = async function(sql, values) {
-    if (isTargetQuery(sql)) {
-      try {
-        const intercepted = await handleInterceptedQuery(promisePool, sql, values);
-        if (intercepted !== null) return intercepted;
-      } catch (err) {
-        console.error('Aviso en intercepción 3NF (pool.execute):', err.message);
-      }
-    }
-    return origPoolExecute(sql, values);
-  };
+  promisePool.execute = (sql, values) => executeWithInterception(promisePool, origPoolExecute, sql, values, 'pool.execute');
 }
 
 promisePool.getConnection = async function() {

@@ -114,6 +114,7 @@ const CARGAS_HISTORICAS_3NF_CORE = `(
           'inscritos', IFNULL(chm.inscritos, 0),
           'cohorte', IFNULL(chm.cohorte, '')
         )
+        ORDER BY chm.id ASC SEPARATOR ','
       ), ']')
       FROM cargas_historicas_materias_v3 chm
       LEFT JOIN materias_catalogo_v3 mc ON chm.materia_id = mc.id
@@ -549,7 +550,8 @@ async function handleInterceptedQuery(executor, sql, params = []) {
         return res;
       }
     } catch (err) {
-      console.warn('Aviso sincronizando 1FN/3FN en cargas_historicas:', err.message);
+      console.warn('Error sincronizando 1FN/3FN en cargas_historicas:', err.message);
+      throw err;
     }
     return [{ affectedRows: 1, insertId: 0, warningStatus: 0 }, undefined];
   }
