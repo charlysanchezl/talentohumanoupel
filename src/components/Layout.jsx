@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, LogOut, ChevronRight, ChevronLeft, ChevronDown, ShieldAlert, Users, ArrowLeft, Menu, X, Building2, Sparkles, Play, Wifi, WifiOff, RefreshCw, CheckCircle2, Database, Radio, Info, Calendar, BookOpen, Search, Image as ImageIcon, Settings, AlertTriangle } from 'lucide-react';
 import { departments, matchDepartment, getCurrentUser, logoutUser, getOfertaStatus, getAcademicPeriodsList, getFlyerConfig } from '../data';
-import { subscribeSyncStatus, triggerAutoSync, getSyncQueue, clearQueue } from '../services/offlineManager';
+import { subscribeSyncStatus, triggerAutoSync, getSyncQueue, clearQueue, verifyServerConnectivity } from '../services/offlineManager';
 import Footer from './Footer';
 
 // Carga perezosa (Lazy Loading) de modales para acelerar el renderizado del Layout
@@ -151,7 +151,13 @@ const Layout = () => {
   }, [location.pathname]);
 
   const handleManualSync = async () => {
-    setSyncMessage('Sincronizando con la base de datos central...');
+    setSyncMessage('Verificando conexión y sincronizando...');
+    const reachable = await verifyServerConnectivity();
+    if (!reachable) {
+      setSyncMessage('Sin conexión con el servidor central.');
+      setTimeout(() => setSyncMessage(''), 4000);
+      return;
+    }
     const res = await triggerAutoSync();
     if (res.success) {
       const count = res.succeeded ?? res.processed ?? 0;
@@ -852,7 +858,7 @@ const Layout = () => {
                     marginBottom: '0.75rem' 
                   }}>
                     <div><strong>Cambios pendientes:</strong> {syncState.queueCount}</div>
-                    <div><strong>Servidor:</strong> http://{window.location.hostname}:3001</div>
+                    <div><strong>Servidor:</strong> {window.location.port === '5173' ? `http://${window.location.hostname}:3001` : window.location.origin}</div>
                   </div>
 
                   {syncMessage && (
@@ -1347,6 +1353,42 @@ const Layout = () => {
               <div style={{ fontSize: '0.85rem', color: '#92400e', lineHeight: 1.4 }}>
                 <strong>Aviso de Mantenimiento Institucional:</strong> {maintenanceBanner.message} {maintenanceBanner.estimatedEnd ? `(Finalización estimada: ${maintenanceBanner.estimatedEnd})` : ''}
               </div>
+            </div>
+          )}
+          {!syncState.isOnline && (
+            <div style={{
+              margin: '1rem 1.5rem 0',
+              padding: '0.85rem 1.25rem',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+              border: '1px solid #f87171',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.12)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.85rem', color: '#991b1b', lineHeight: 1.4 }}>
+                <WifiOff size={18} color="#dc2626" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Sin conexión con el servidor central:</strong> Verifica tu internet o espera unos segundos antes de guardar cambios críticos en la base de datos.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleManualSync}
+                style={{
+                  fontSize: '0.78rem',
+                  padding: '0.3rem 0.75rem',
+                  background: '#ffffff',
+                  borderColor: '#f87171',
+                  color: '#991b1b'
+                }}
+              >
+                Reintentar conexión
+              </button>
             </div>
           )}
           <Outlet />

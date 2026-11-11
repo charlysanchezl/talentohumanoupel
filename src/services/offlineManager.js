@@ -29,17 +29,58 @@ export const checkServerHealth = async (apiUrl) => {
   }
 };
 
+export const verifyServerConnectivity = async () => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (onlineStatus) {
+      onlineStatus = false;
+      notifyListeners({ isOnline: false, isSyncing, queueCount: getQueueCount() });
+    }
+    return false;
+  }
+
+  const healthy = await checkServerHealth(getBaseApiUrl());
+  if (healthy !== onlineStatus) {
+    onlineStatus = healthy;
+    notifyListeners({ isOnline: healthy, isSyncing, queueCount: getQueueCount() });
+    if (healthy && getQueueCount() > 0) {
+      triggerAutoSync().catch(() => {});
+    }
+  }
+  return healthy;
+};
+
 if (typeof window !== 'undefined') {
   window.addEventListener('online', async () => {
-    onlineStatus = true;
-    notifyListeners({ isOnline: true, isSyncing, queueCount: getQueueCount() });
-    await triggerAutoSync();
+    await verifyServerConnectivity();
   });
 
   window.addEventListener('offline', () => {
     onlineStatus = false;
     notifyListeners({ isOnline: false, isSyncing, queueCount: getQueueCount() });
   });
+
+  window.addEventListener('focus', () => {
+    verifyServerConnectivity().catch(() => {});
+  });
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        verifyServerConnectivity().catch(() => {});
+      }
+    });
+  }
+
+  // Sondeo ligero cada 30s (solo si la pestaña está visible) para detectar caídas reales del servidor
+  setTimeout(() => {
+    verifyServerConnectivity().catch(() => {});
+  }, 1500);
+
+  setInterval(() => {
+    if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+      verifyServerConnectivity().catch(() => {});
+    }
+  }, 30000);
 }
 
 export const subscribeSyncStatus = (callback) => {
