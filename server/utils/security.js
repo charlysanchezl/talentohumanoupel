@@ -39,6 +39,15 @@ const JWT_SECRET = resolveJwtSecret();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 /**
+ * Verifica si una cadena ya corresponde a un hash bcrypt válido ($2a$, $2b$, $2y$).
+ */
+function isBcryptHash(value) {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  return /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(trimmed);
+}
+
+/**
  * Hashea una contraseña con bcrypt
  */
 async function hashPassword(plainText) {
@@ -49,22 +58,37 @@ async function hashPassword(plainText) {
 }
 
 /**
- * Verifica una contraseña.
- * Soporta tanto hashes bcrypt ($2a$, $2b$, $2y$) como comparación exacta en texto plano
- * para compatibilidad y transición suave sin romper usuarios existentes.
+ * Devuelve el hash bcrypt existente o lo genera si recibe texto plano.
+ */
+async function ensureBcryptHash(password) {
+  if (!password || typeof password !== 'string') {
+    throw new Error('La contraseña a proteger debe ser un texto válido');
+  }
+  const clean = password.trim();
+  if (isBcryptHash(clean)) return clean;
+  return await hashPassword(clean);
+}
+
+/**
+ * Verifica una contraseña exclusivamente contra un hash bcrypt válido.
+ * Las cuentas heredadas en texto plano se migran automáticamente a bcrypt al iniciar el servidor.
  */
 async function verifyPassword(plainText, storedPassword) {
-  if (!plainText || !storedPassword) return false;
+  if (!plainText || typeof plainText !== 'string' || !storedPassword || typeof storedPassword !== 'string') {
+    return false;
+  }
   const cleanInput = plainText.trim();
   const cleanStored = storedPassword.trim();
 
-  // Si está almacenada como hash bcrypt
-  if (cleanStored.startsWith('$2a$') || cleanStored.startsWith('$2b$') || cleanStored.startsWith('$2y$')) {
-    return await bcrypt.compare(cleanInput, cleanStored);
+  if (!isBcryptHash(cleanStored)) {
+    return false;
   }
 
-  // Comparación en texto plano para cuentas heredadas
-  return cleanInput === cleanStored;
+  try {
+    return await bcrypt.compare(cleanInput, cleanStored);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -94,7 +118,9 @@ function verifyToken(token) {
 }
 
 module.exports = {
+  isBcryptHash,
   hashPassword,
+  ensureBcryptHash,
   verifyPassword,
   generateToken,
   verifyToken,

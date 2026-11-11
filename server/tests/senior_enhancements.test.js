@@ -2,6 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 const { normalizeDepartmentName } = require('../utils/normalizer');
+const { isBcryptHash, hashPassword, ensureBcryptHash, verifyPassword } = require('../utils/security');
 
 describe('Suite de Pruebas: Mejoras Técnicas Senior Implementadas', () => {
 
@@ -45,6 +46,24 @@ describe('Suite de Pruebas: Mejoras Técnicas Senior Implementadas', () => {
       // Docente CON clave legada en texto plano:
       assert.strictEqual(verifyPortalPassword('MiClaveNueva123', customPlain, default4), true, 'Debe aceptar clave legada en texto plano');
       assert.strictEqual(verifyPortalPassword('5678', customPlain, default4), false, 'DEBE RECHAZAR los 4 dígitos por defecto si ya tiene clave legada');
+    });
+
+    it('security.verifyPassword debe exigir hashes bcrypt válidos y rechazar texto plano', async () => {
+      const secret = 'Secret123!';
+      const hashed = await hashPassword(secret);
+
+      assert.strictEqual(isBcryptHash(hashed), true);
+      assert.strictEqual(isBcryptHash(secret), false);
+      assert.strictEqual(await verifyPassword(secret, hashed), true);
+      assert.strictEqual(await verifyPassword('WrongPass', hashed), false);
+      assert.strictEqual(await verifyPassword(secret, secret), false, 'No debe aceptar contraseñas almacenadas en texto plano');
+
+      const ensuredFromPlain = await ensureBcryptHash(secret);
+      assert.strictEqual(isBcryptHash(ensuredFromPlain), true);
+      assert.strictEqual(await verifyPassword(secret, ensuredFromPlain), true);
+
+      const ensuredIdempotent = await ensureBcryptHash(hashed);
+      assert.strictEqual(ensuredIdempotent, hashed, 'ensureBcryptHash no debe re-hashear un hash bcrypt existente');
     });
   });
 

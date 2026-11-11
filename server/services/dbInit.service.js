@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../db');
+const { isBcryptHash, hashPassword } = require('../utils/security');
 
 async function syncCatalogoMaterias() {
   try {
@@ -172,6 +173,7 @@ async function syncDatabaseSchema() {
       await ensureIndex('audit_logs', 'idx_audit_user', 'user_name');
       await ensureIndex('usuarios', 'idx_usuarios_role', 'role');
 
+      await migrateLegacyPlaintextPasswords();
       console.log('Departamentos e índices de rendimiento verificados con éxito en BD (10/10 3FN).');
     } catch (e) {
       console.error('Error verificando índices en BD:', e);
@@ -181,7 +183,44 @@ async function syncDatabaseSchema() {
   }
 }
 
+async function migrateLegacyPlaintextPasswords() {
+  const exec = typeof db.nativeQuery === 'function' ? db.nativeQuery.bind(db) : db.query.bind(db);
+  let migratedUsers = 0;
+  let migratedDocentes = 0;
+
+  try {
+    const [userRows] = await exec(
+      "SELECT id, password FROM usuarios WHERE password IS NOT NULL AND TRIM(password) <> ''"
+    );
+    for (const row of userRows) {
+      if (!isBcryptHash(row.password)) {
+        const hashed = await hashPassword(String(row.password));
+        await exec('UPDATE usuarios SET password = ? WHERE id = ?', [hashed, row.id]);
+        migratedUsers++;
+      }
+    }
+
+    const [docRows] = await exec(
+      "SELECT id, clave_portal_hash FROM docentes_v3 WHERE clave_portal_hash IS NOT NULL AND TRIM(clave_portal_hash) <> ''"
+    );
+    for (const row of docRows) {
+      if (!isBcryptHash(row.clave_portal_hash)) {
+        const hashed = await hashPassword(String(row.clave_portal_hash));
+        await exec('UPDATE docentes_v3 SET clave_portal_hash = ? WHERE id = ?', [hashed, row.id]);
+        migratedDocentes++;
+      }
+    }
+
+    if (migratedUsers > 0 || migratedDocentes > 0) {
+      console.log(`🔒 Migradas contraseñas heredadas a bcrypt: ${migratedUsers} usuarios, ${migratedDocentes} docentes.`);
+    }
+  } catch (err) {
+    console.warn('Aviso migrando contraseñas heredadas a bcrypt:', err.message);
+  }
+}
+
 module.exports = {
   syncDatabaseSchema,
-  syncCatalogoMaterias
+  syncCatalogoMaterias,
+  migrateLegacyPlaintextPasswords
 };

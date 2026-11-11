@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcryptjs');
 const db = require('../db');
 const logger = require('../utils/logger');
 const { requireAuth, requireStaffAuth, requireRole, STAFF_ROLES } = require('../middlewares/auth');
-const { generateToken } = require('../utils/security');
+const { generateToken, verifyPassword, hashPassword, ensureBcryptHash } = require('../utils/security');
 const { createRateLimiter } = require('../middlewares/securityHeaders');
 const { sanitizeString, validateCedula } = require('../utils/validator');
 const { logAction } = require('../services/auditService');
@@ -438,17 +437,7 @@ router.post('/docentes/validar-portal', createRateLimiter(20, 10 * 60 * 1000, 'D
     let isPasswordValid = false;
 
     if (hasCustomClave) {
-      const expectedClave = String(existingStaff.clave).trim();
-      const isBcryptHash = expectedClave.startsWith('$2a$') || expectedClave.startsWith('$2b$');
-      if (isBcryptHash) {
-        try {
-          isPasswordValid = bcrypt.compareSync(enteredClave, expectedClave);
-        } catch (e) {
-          isPasswordValid = false;
-        }
-      } else {
-        isPasswordValid = (enteredClave === expectedClave);
-      }
+      isPasswordValid = await verifyPassword(enteredClave, String(existingStaff.clave).trim());
     } else {
       // Si el docente aún NO tiene clave personalizada, ingresa con los últimos 4 dígitos por defecto
       isPasswordValid = (enteredClave === defaultClave);
@@ -727,7 +716,7 @@ router.post('/docentes/cambiar-clave-portal', requireAuth, createRateLimiter(15,
     }
 
     const doc = rows[0];
-    const hashedPassword = bcrypt.hashSync(cleanPass, 10);
+    const hashedPassword = await hashPassword(cleanPass);
 
     await db.query('UPDATE docentes SET clave = ? WHERE cedula = ?', [hashedPassword, doc.cedula]);
     updateDocenteInCache(doc.cedula, { clave: hashedPassword });
@@ -789,8 +778,7 @@ router.post('/docentes/portal-actualizar-ficha', requireAuth, async (req, res) =
 
     let finalClave = doc.clave || null;
     if (data.clave && String(data.clave).trim().length >= 4) {
-      const rawClave = String(data.clave).trim();
-      finalClave = (rawClave.startsWith('$2a$') || rawClave.startsWith('$2b$')) ? rawClave : bcrypt.hashSync(rawClave, 10);
+      finalClave = await ensureBcryptHash(String(data.clave));
     }
 
     if (isNew) {
@@ -872,10 +860,7 @@ router.post('/docentes', requireRole(['ADMIN', 'JEFE']), async (req, res) => {
     // Hashing Senior con Bcrypt si se proporciona contraseña
     let finalClave = null;
     if (d.clave !== undefined && d.clave !== null && String(d.clave).trim() !== '') {
-      const rawClave = String(d.clave).trim();
-      finalClave = (rawClave.startsWith('$2a$') || rawClave.startsWith('$2b$'))
-        ? rawClave
-        : bcrypt.hashSync(rawClave, 10);
+      finalClave = await ensureBcryptHash(String(d.clave));
     }
 
     await conn.beginTransaction();
