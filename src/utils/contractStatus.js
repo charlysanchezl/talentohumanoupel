@@ -90,3 +90,22 @@ export const getStatusBadgeInfo = (status) => {
       return { label: status || 'Por Revisar', color: '#92400e', bg: '#fef3c7', border: '#fde68a' };
   }
 };
+
+/**
+ * Resuelve la especialidad real a mostrar en Directorio y Detalle:
+ * Si las asignaturas asignadas en el período consultado apuntan a especialidades concretas
+ * y la especialidad base no coincide con ninguna de ellas (residuo de período anterior),
+ * muestra la especialidad real atendida en el período actual.
+ */
+export const getDisplayEspecialidad = (staff, fallback = '-') => {
+  if (!staff) return fallback;
+  const baseEsp = String(staff.especialidad || '').trim();
+  const mats = Array.isArray(staff.materias) ? staff.materias : [];
+  const matEsps = Array.from(
+    new Set(mats.map(m => String(m?.especialidadDestino || '').trim()).filter(Boolean))
+  );
+  if (matEsps.length > 0 && (!baseEsp || !matEsps.includes(baseEsp))) {
+    return matEsps[0];
+  }
+  return baseEsp || matEsps[0] || String(staff.titulosPregrado || '').trim() || fallback;
+};

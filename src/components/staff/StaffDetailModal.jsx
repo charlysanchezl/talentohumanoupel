@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { X, Edit, Trash2, Download, Printer } from 'lucide-react';
 import { formatAccountWithRoleMask } from '../../services/bankTxtExporter';
+import { getDisplayEspecialidad } from '../../utils/contractStatus';
 
 export const StaffDetailModal = ({
   staffToView,
@@ -88,7 +89,7 @@ export const StaffDetailModal = ({
               <div style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}><strong>Categoría:</strong> {staffToView.categoriaDocente || 'Instructor'}</div>
               <div style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}><strong>Dedicación:</strong> {staffToView.dedicacion || 'Tiempo Convencional'}</div>
               <div style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}><strong>Centro de Atención:</strong> <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{staffToView.sedeCentro || 'Rubio'}</span></div>
-              <div style={{ fontSize: '0.85rem' }}><strong>Especialidad:</strong> {staffToView.especialidad || (staffToView.materias && staffToView.materias.find(m => m.especialidadDestino)?.especialidadDestino) || staffToView.titulosPregrado || 'N/A'}</div>
+              <div style={{ fontSize: '0.85rem' }}><strong>Especialidad:</strong> {getDisplayEspecialidad(staffToView, 'N/A')}</div>
             </div>
           </div>
 

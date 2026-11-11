@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CheckSquare, X, Edit, Calendar, Lock, ShieldCheck, History, Globe, Plus, Trash2, BookOpen, Clock, Users, Hash } from 'lucide-react';
 import { formatAccountWithRoleMask } from '../../services/bankTxtExporter';
 import { especialidades } from '../../data';
+import { getDisplayEspecialidad } from '../../utils/contractStatus';
 
 export const StaffValidateModal = ({
   staffToValidate,
@@ -84,7 +85,7 @@ export const StaffValidateModal = ({
                 <div><strong>Pregrado:</strong> {staffToValidate.titulosPregrado || 'No registrado'}</div>
                 <div><strong>Categoría:</strong> {staffToValidate.categoriaDocente}</div>
                 <div><strong>Centro:</strong> <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{staffToValidate.sedeCentro || 'Rubio'}</span></div>
-                <div><strong>Especialidad:</strong> {staffToValidate.especialidad || (staffToValidate.materias && staffToValidate.materias.find(m => m.especialidadDestino)?.especialidadDestino) || staffToValidate.titulosPregrado || 'N/A'}</div>
+                <div><strong>Especialidad:</strong> {getDisplayEspecialidad(staffToValidate, 'N/A')}</div>
               </div>
               <div style={{ marginTop: '0.65rem', paddingTop: '0.5rem', borderTop: '1px dashed #cbd5e1' }}>
                 <button 

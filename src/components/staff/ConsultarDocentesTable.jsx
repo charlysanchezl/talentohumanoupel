@@ -1,6 +1,7 @@
 import React from 'react';
 import { CheckSquare, Clock, Lock, Calculator, MoreHorizontal } from 'lucide-react';
 import StaffPagination from './StaffPagination';
+import { getDisplayEspecialidad } from '../../utils/contractStatus';
 
 const ConsultarDocentesTable = ({
   paginatedStaff = [],
@@ -64,7 +65,7 @@ const ConsultarDocentesTable = ({
                     </span>
                   </td>
                   <td>
-                    {staff.especialidad || (staff.materias && staff.materias.find(m => m.especialidadDestino)?.especialidadDestino) || staff.titulosPregrado || '-'}
+                    {getDisplayEspecialidad(staff, '-')}
                   </td>
                   <td style={{ fontSize: '0.85rem', maxWidth: '280px' }}>
                     {staff.materias && staff.materias.length > 0 ? (

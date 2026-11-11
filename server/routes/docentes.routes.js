@@ -23,6 +23,24 @@ function stripSensitiveDocenteFields(doc) {
   return safeDoc;
 }
 
+/**
+ * Resuelve la especialidad real mostrada en Directorio/Consulta:
+ * Si el período consultado es histórico/planificado, o si la especialidad base del docente
+ * quedó desactualizada de un período anterior y no coincide con ninguna materia asignada en este período,
+ * prevalece la especialidad destino real de las asignaturas del período.
+ */
+function resolveDisplayEspecialidad(docEspecialidad, mats = [], preferMats = false) {
+  const baseEsp = String(docEspecialidad || '').trim();
+  const matEsps = Array.from(
+    new Set((mats || []).map(m => String(m?.especialidadDestino || '').trim()).filter(Boolean))
+  );
+  if (matEsps.length === 0) return baseEsp;
+  if (preferMats || !baseEsp || !matEsps.includes(baseEsp)) {
+    return matEsps[0];
+  }
+  return baseEsp;
+}
+
 function canAccessDocenteRecord(user, targetCedula) {
   if (!user) return false;
   if (STAFF_ROLES.includes(user.role)) return true;
@@ -77,9 +95,21 @@ async function fetchDocentesListInternal(periodo) {
       }
     }
 
+    // Si existen materias etiquetadas con el período activo oficial, priorizarlas sobre restos de otros períodos
+    if (activePeriodName) {
+      for (const k of Object.keys(materiasPorDocente)) {
+        const activeMats = materiasPorDocente[k].filter(m => m.periodoAcademico === activePeriodName);
+        if (activeMats.length > 0) {
+          materiasPorDocente[k] = activeMats;
+        }
+      }
+    }
+
     let fallbackCargasMap = {};
     try {
-      const [cargas] = await db.query('SELECT * FROM cargas_historicas ORDER BY id ASC');
+      const [cargas] = activePeriodName
+        ? await db.query('SELECT * FROM cargas_historicas WHERE periodoAcademico = ? ORDER BY id ASC', [activePeriodName])
+        : await db.query('SELECT * FROM cargas_historicas ORDER BY id ASC');
       for (const c of cargas) {
         let mats = [];
         try {
@@ -117,7 +147,7 @@ async function fetchDocentesListInternal(periodo) {
       const totSem = docMats.reduce((sum, m) => sum + (parseInt(m.horasSemanal) || 0), 0);
       const totLap = docMats.reduce((sum, m) => sum + (parseInt(m.horasLapso) || 0), 0);
 
-      const fallbackEsp = docMats.find(m => m.especialidadDestino && String(m.especialidadDestino).trim() !== '')?.especialidadDestino || '';
+      const resolvedEsp = resolveDisplayEspecialidad(doc.especialidad, docMats, false);
 
       const hasRealLoad = docMats.length > 0 && totSem > 0;
       const finalStatus = (!hasRealLoad && (doc.status === 'Validado' || doc.status === 'Activo'))
@@ -128,7 +158,7 @@ async function fetchDocentesListInternal(periodo) {
         ...doc,
         department: normalizeDepartmentName(doc.department),
         status: finalStatus,
-        especialidad: (doc.especialidad && String(doc.especialidad).trim() !== '') ? doc.especialidad : fallbackEsp,
+        especialidad: resolvedEsp,
         periodoAcademico: (periodo && periodo !== 'Todos') ? periodo : (activePeriodName || doc.periodoAcademico || '2026-I'),
         semanas: activePeriodObj?.semanas || doc.semanas || 15,
         fechaDesde: activePeriodObj?.fechaDesde || doc.fechaDesde || '',
@@ -187,11 +217,11 @@ async function fetchDocentesListInternal(periodo) {
       const docNumKey = String(doc.cedula || '').replace(/\D/g, '');
       const carga = cargasMap[doc.cedula] || (docNumKey ? cargasMap[docNumKey] : null);
       if (carga) {
-        const fallbackEsp = (carga.materias || []).find(m => m.especialidadDestino && String(m.especialidadDestino).trim() !== '')?.especialidadDestino || '';
+        const resolvedEsp = resolveDisplayEspecialidad(doc.especialidad, carga.materias || [], true);
         result.push(stripSensitiveDocenteFields({
           ...doc,
           department: normalizeDepartmentName(doc.department),
-          especialidad: (doc.especialidad && String(doc.especialidad).trim() !== '') ? doc.especialidad : fallbackEsp,
+          especialidad: resolvedEsp,
           periodoAcademico: periodo,
           status: carga.status || 'En Planificación',
           semanas: reqPeriodObj?.semanas || carga.semanas || doc.semanas || 15,
@@ -243,7 +273,7 @@ async function fetchDocentesListInternal(periodo) {
           };
         });
 
-        const fallbackEsp = enrichedMats.find(m => m.especialidadDestino && String(m.especialidadDestino).trim() !== '')?.especialidadDestino || '';
+        const resolvedEsp = resolveDisplayEspecialidad(doc.especialidad, enrichedMats, true);
         const cargaTotSem = carga.totalHorasSemanal || enrichedMats.reduce((s, m) => s + (parseInt(m.horasSemanal) || 0), 0);
         const cargaTotLap = carga.totalHorasLapso || enrichedMats.reduce((s, m) => s + (parseInt(m.horasLapso) || 0), 0);
         const cargaHasRealLoad = enrichedMats.length > 0 && cargaTotSem > 0;
@@ -254,7 +284,7 @@ async function fetchDocentesListInternal(periodo) {
         result.push(stripSensitiveDocenteFields({
           ...doc,
           department: normalizeDepartmentName(doc.department),
-          especialidad: (doc.especialidad && String(doc.especialidad).trim() !== '') ? doc.especialidad : fallbackEsp,
+          especialidad: resolvedEsp,
           periodoAcademico: periodo,
           status: finalCargaStatus,
           semanas: reqPeriodObj?.semanas || carga.semanas || doc.semanas || 15,

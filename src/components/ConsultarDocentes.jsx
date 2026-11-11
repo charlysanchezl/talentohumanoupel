@@ -8,7 +8,8 @@ import {
   matchDepartment, 
   getAcademicPeriodsList, 
   isExpedienteCompleto, 
-  getMissingExpedienteFields 
+  getMissingExpedienteFields,
+  invalidateStaffCache
 } from '../data';
 import { matchesSearch } from '../utils/searchHelper';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
@@ -324,7 +325,8 @@ const ConsultarDocentes = () => {
     if (!staffToEdit) return;
     try {
       await createStaff(staffToEdit);
-      setStaffList(prev => prev.map(s => s.cedula === staffToEdit.cedula ? { ...s, ...staffToEdit } : s));
+      invalidateStaffCache();
+      await fetchStaff(filterPeriodo);
       alert('Datos del docente actualizados correctamente.');
       setStaffToEdit(null);
     } catch (err) {
@@ -432,6 +434,7 @@ const ConsultarDocentes = () => {
             onClose={() => {
               setIsPeriodModalOpen(false);
               setInitialPeriodIdToEdit(null);
+              invalidateStaffCache();
               fetchStaff(filterPeriodo);
             }}
           />
@@ -443,6 +446,7 @@ const ConsultarDocentes = () => {
             isOpen={isReplicateModalOpen}
             onClose={() => {
               setIsReplicateModalOpen(false);
+              invalidateStaffCache();
               fetchStaff(filterPeriodo);
             }}
             sourceStaffList={staffList}
