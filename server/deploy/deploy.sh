@@ -33,13 +33,20 @@ if [[ -f "$APP_DIR/server/.env" ]] && command -v mysqldump >/dev/null 2>&1; then
 fi
 
 echo "==> 2. Descargando últimos cambios desde origin/main..."
+BEFORE_SHA="$(git rev-parse HEAD 2>/dev/null || echo '')"
 git fetch origin
 git reset --hard origin/main
 
-echo "==> 3. Instalando dependencias si aplica..."
-npm ci --no-audit --no-fund
-if [[ -d "$APP_DIR/server" ]]; then
-  (cd "$APP_DIR/server" && npm ci --no-audit --no-fund)
+echo "==> 3. Actualizando dependencias solo si cambiaron..."
+CHANGED_FILES=""
+if [[ -n "$BEFORE_SHA" ]]; then
+  CHANGED_FILES="$(git diff --name-only "$BEFORE_SHA" HEAD 2>/dev/null || true)"
+fi
+if [[ ! -d "$APP_DIR/node_modules" ]] || echo "$CHANGED_FILES" | grep -qE '^package(-lock)?\.json$'; then
+  npm install --no-audit --no-fund
+fi
+if [[ -d "$APP_DIR/server" ]] && { [[ ! -d "$APP_DIR/server/node_modules" ]] || echo "$CHANGED_FILES" | grep -qE '^server/package(-lock)?\.json$'; }; then
+  (cd "$APP_DIR/server" && npm install --no-audit --no-fund)
 fi
 
 echo "==> 4. Compilando frontend..."

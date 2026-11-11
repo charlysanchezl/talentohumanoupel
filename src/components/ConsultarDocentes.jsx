@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { Lock, AlertCircle, RotateCcw } from 'lucide-react';
 import { 
   getStaffData, 
   getCurrentUser, 
@@ -500,6 +501,86 @@ const ConsultarDocentes = () => {
         setInitialPeriodIdToEdit={setInitialPeriodIdToEdit}
         setTargetPeriodForReplication={setTargetPeriodForReplication}
       />
+
+      {(() => {
+        const activePeriodObj = academicPeriodsList.find(p => p.estado === 'ACTIVO');
+        const selectedPeriodObj = filterPeriodo === 'Todos'
+          ? activePeriodObj
+          : academicPeriodsList.find(p => p.nombre === filterPeriodo);
+
+        if (selectedPeriodObj?.estado === 'CERRADO') {
+          return (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              padding: '0.75rem 1rem',
+              marginBottom: '1rem',
+              borderRadius: '10px',
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              color: '#92400e',
+              fontSize: '0.86rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <Lock size={16} style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Consulta Histórica ({selectedPeriodObj.nombre} — Cerrado):</strong> Estás viendo el respaldo congelado de este lapso.
+                  {activePeriodObj ? ` El período activo (${activePeriodObj.nombre}) sigue intacto.` : ''}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setFilterPeriodo('Todos')}
+                style={{
+                  fontSize: '0.78rem',
+                  padding: '0.3rem 0.7rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: '#ffffff',
+                  borderColor: '#f59e0b',
+                  color: '#92400e'
+                }}
+              >
+                <RotateCcw size={13} />
+                Volver al período activo
+              </button>
+            </div>
+          );
+        }
+
+        if (
+          selectedPeriodObj?.estado === 'ACTIVO' &&
+          typeof selectedPeriodObj.observaciones === 'string' &&
+          selectedPeriodObj.observaciones.toLowerCase().includes('reactivado')
+        ) {
+          return (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.55rem',
+              padding: '0.75rem 1rem',
+              marginBottom: '1rem',
+              borderRadius: '10px',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              color: '#1e40af',
+              fontSize: '0.86rem'
+            }}>
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Período Reabierto Temporalmente ({selectedPeriodObj.nombre}):</strong> Recuerda reactivar el período en curso desde <strong>Gestión de Lapsos</strong> al terminar tu revisión.
+              </span>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
 
       {/* Contenido según pestaña activa */}
       {activeTab === 'docentes' ? (
