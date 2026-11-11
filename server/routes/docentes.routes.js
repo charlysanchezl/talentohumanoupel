@@ -993,12 +993,14 @@ router.put('/docentes/carga', requireRole(['ADMIN', 'DOCENCIA', 'JEFE']), async 
       'rif', 'telefonos', 'correo', 'correoInstitucional', 'direccion',
       'titulosPregrado', 'titulosPostgrado', 'doctorado', 'categoriaDocente', 'dedicacion'
     ];
+    const effectivePeriodo = targetPeriodo || periodoAcademico || (docRow.length > 0 ? docRow[0].periodoAcademico : '2026-I');
+
     let updateQuery = 'UPDATE docentes SET status = ?';
     let updateParams = [finalCargaStatus];
 
-    if (periodoAcademico !== undefined) {
+    if (periodoAcademico !== undefined || effectivePeriodo) {
       updateQuery += ', periodoAcademico = ?, semanas = ?, fechaDesde = ?, fechaHasta = ?';
-      updateParams.push(periodoAcademico, parseInt(semanas) || 15, fechaDesde || '', fechaHasta || '');
+      updateParams.push(effectivePeriodo, parseInt(semanas) || 15, fechaDesde || '', fechaHasta || '');
     }
 
     for (const f of allowedDocenteFields) {
@@ -1010,7 +1012,7 @@ router.put('/docentes/carga', requireRole(['ADMIN', 'DOCENCIA', 'JEFE']), async 
 
     if (!req.body.especialidad && materias && materias.length > 0) {
       const matEsp = materias.find(m => m.especialidadDestino && String(m.especialidadDestino).trim() !== '')?.especialidadDestino;
-      if (matEsp && (!docRow[0] || !docRow[0].especialidad || docRow[0].especialidad.trim() === '')) {
+      if (matEsp) {
         updateQuery += ', especialidad = ?';
         updateParams.push(String(matEsp).trim());
       }
@@ -1019,7 +1021,7 @@ router.put('/docentes/carga', requireRole(['ADMIN', 'DOCENCIA', 'JEFE']), async 
     updateQuery += ' WHERE cedula = ? OR cedula = ?';
     updateParams.push(canonicalCedula, bareCedula);
 
-    const per = periodoAcademico || (docRow.length > 0 ? docRow[0].periodoAcademico : '2026-I');
+    const per = effectivePeriodo;
     let preservedMaterias = [];
 
     const conn = await db.getConnection();
@@ -1131,21 +1133,21 @@ router.put('/docentes/carga', requireRole(['ADMIN', 'DOCENCIA', 'JEFE']), async 
     const auditorRole = (req.user && req.user.role) ? req.user.role : (auditor && auditor.role ? auditor.role : 'ADMIN');
     await logAction(auditorUser, auditorRole, 'Actualizó Validación/Carga', `Cédula: ${canonicalCedula}, Estado: ${finalCargaStatus}, Materias asignadas: ${materias ? materias.length : 0}`, req);
 
-    updateDocenteInCache(canonicalCedula, {
+    const resolvedEspecialidad = req.body.especialidad !== undefined
+      ? req.body.especialidad
+      : (preservedMaterias.find(m => m.especialidadDestino && String(m.especialidadDestino).trim() !== '')?.especialidadDestino);
+
+    const cachePatch = {
       status: finalCargaStatus,
       materias: preservedMaterias,
       totalHorasSemanal: totSem,
       totalHorasLapso: totLap,
-      periodoAcademico: per
-    });
+      periodoAcademico: per,
+      ...(resolvedEspecialidad !== undefined ? { especialidad: resolvedEspecialidad } : {})
+    };
+    updateDocenteInCache(canonicalCedula, cachePatch);
     if (cleanCedula !== canonicalCedula) {
-      updateDocenteInCache(cleanCedula, {
-        status: status || 'Activo',
-        materias: preservedMaterias,
-        totalHorasSemanal: totSem,
-        totalHorasLapso: totLap,
-        periodoAcademico: per
-      });
+      updateDocenteInCache(cleanCedula, cachePatch);
     }
     invalidateDocentesCache(true);
     res.json({ success: true, isPlanificacion: false });

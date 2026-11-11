@@ -17,6 +17,7 @@ import {
   getMissingExpedienteFields 
 } from '../data';
 import { matchesSearch } from '../utils/searchHelper';
+import { resolveSyncedEspecialidad } from '../hooks/useStaffValidation';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
 import { formatFechaEspanol } from '../utils/staffExcelExportHelper';
 
@@ -188,10 +189,15 @@ const StaffList = () => {
             ...existingDocente,
             department: updatedDepts
           };
-          createStaff(updatedStaff).then(() => {
-            fetchData();
-            alert(`¡Docente ${existingDocente.nombres} ${existingDocente.apellidos} ahora pertenece a: ${updatedDepts}!`);
-          });
+          createStaff(updatedStaff)
+            .then(() => {
+              fetchData();
+              alert(`¡Docente ${existingDocente.nombres} ${existingDocente.apellidos} ahora pertenece a: ${updatedDepts}!`);
+            })
+            .catch(err => {
+              fetchData();
+              alert(err?.message || 'Error al asociar el docente en el servidor.');
+            });
           setNewDocente({ cedula: '', nombres: '', apellidos: '', sedeCentro: 'Rubio', periodoAcademico: '', department: currentDept });
           setIsAddDocenteModalOpen(false);
           return;
@@ -218,7 +224,12 @@ const StaffList = () => {
 
     const updatedList = [newStaff, ...staffList];
     setStaffList(updatedList);
-    createStaff(newStaff).then(() => fetchData());
+    createStaff(newStaff)
+      .then(() => fetchData())
+      .catch(err => {
+        fetchData();
+        alert(err?.message || 'Error al registrar el docente en el servidor.');
+      });
     
     setNewDocente({ cedula: '', nombres: '', apellidos: '', sedeCentro: 'Rubio', periodoAcademico: '', department: currentDept });
     setIsAddDocenteModalOpen(false);
@@ -236,13 +247,16 @@ const StaffList = () => {
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (staffToEdit) {
+    if (!staffToEdit) return;
+    try {
       await createStaff(staffToEdit);
       await fetchData();
       if (staffToView && staffToView.cedula === staffToEdit.cedula) {
         setStaffToView({ ...staffToView, ...staffToEdit });
       }
       setStaffToEdit(null);
+    } catch (err) {
+      alert(err?.message || 'Error al guardar los datos del docente en el servidor.');
     }
   };
 
@@ -498,29 +512,27 @@ const StaffList = () => {
     }
 
     const cleanMaterias = materiasForm.filter(m => m.nombre && m.nombre.trim() !== '');
-    const firstMatEsp = cleanMaterias.find(m => m.especialidadDestino && m.especialidadDestino.trim() !== '')?.especialidadDestino;
-    const finalEspecialidad = staffToValidate.especialidad || firstMatEsp || '';
+    const finalEspecialidad = resolveSyncedEspecialidad(staffToValidate, cleanMaterias);
     
     try {
-      const updatedList = staffList.map(staff => {
-        if (staff.cedula === staffToValidate.cedula) {
-          return { 
-            ...staff, 
-            ...validationForm,
-            especialidad: finalEspecialidad,
-            materias: cleanMaterias, 
-            status: 'Activo' 
-          };
-        }
-        return staff;
-      });
-      setStaffList(updatedList);
-      
       const res = await updateStaffCarga(staffToValidate.cedula, cleanMaterias, 'Activo', {
         ...validationForm,
         especialidad: finalEspecialidad
       });
       if (res) {
+        const updatedList = staffList.map(staff => {
+          if (staff.cedula === staffToValidate.cedula) {
+            return { 
+              ...staff, 
+              ...validationForm,
+              especialidad: finalEspecialidad,
+              materias: cleanMaterias, 
+              status: 'Activo' 
+            };
+          }
+          return staff;
+        });
+        setStaffList(updatedList);
         await fetchData(filterPeriodo);
         if (staffToView && staffToView.cedula === staffToValidate.cedula) {
           setStaffToView({ ...staffToView, ...validationForm, especialidad: finalEspecialidad, materias: cleanMaterias, status: 'Activo' });
@@ -534,6 +546,7 @@ const StaffList = () => {
       }
     } catch (error) {
       console.error("Error saving validation:", error);
+      alert(error?.message || "Hubo un error al guardar en la base de datos. Verifica la conexión.");
     } finally {
       setStaffToValidate(null);
     }

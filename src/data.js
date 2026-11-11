@@ -96,11 +96,17 @@ export const getStaffData = async (periodo) => {
   }
 };
 
+const extractServerErrorMessage = async (res, fallback) => {
+  const errData = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    return errData.error || errData.message || 'Sesión expirada o no autorizada (401). Cierre sesión e inicie sesión nuevamente.';
+  }
+  return errData.error || errData.message || fallback;
+};
+
 export const createStaff = async (staffData) => {
   invalidateStaffCache();
   const auditor = getCurrentUser();
-  // Actualización optimista local inmediata
-  updateLocalCacheOptimistically('CREATE_STAFF', staffData);
 
   try {
     const res = await fetch(`${API_URL}/docentes`, {
@@ -109,15 +115,24 @@ export const createStaff = async (staffData) => {
       body: JSON.stringify({ ...staffData, auditor })
     });
     if (res.ok) {
+      updateLocalCacheOptimistically('CREATE_STAFF', staffData);
       return true;
     }
-    // Si el servidor falla, encolar para sincronización
-    enqueueMutation('CREATE_STAFF', staffData, auditor);
-    return true;
+    if (res.status >= 502) {
+      updateLocalCacheOptimistically('CREATE_STAFF', staffData);
+      enqueueMutation('CREATE_STAFF', staffData, auditor);
+      return true;
+    }
+    const errMsg = await extractServerErrorMessage(res, 'Error del servidor al guardar el docente.');
+    throw new Error(errMsg);
   } catch (err) {
-    console.warn('Guardado en cola offline (sin conexión):', err.message);
-    enqueueMutation('CREATE_STAFF', staffData, auditor);
-    return true;
+    if (err && err.name === 'TypeError') {
+      console.warn('Guardado en cola offline (sin conexión):', err.message);
+      updateLocalCacheOptimistically('CREATE_STAFF', staffData);
+      enqueueMutation('CREATE_STAFF', staffData, auditor);
+      return true;
+    }
+    throw err;
   }
 };
 
@@ -125,8 +140,6 @@ export const updateStaffCarga = async (cedula, materias, status, validationData 
   invalidateStaffCache();
   const auditor = getCurrentUser();
   const payload = { cedula, materias, status, ...validationData };
-  // Actualización optimista local inmediata
-  updateLocalCacheOptimistically('UPDATE_CARGA', payload);
 
   try {
     const res = await fetch(`${API_URL}/docentes/carga`, {
@@ -135,23 +148,31 @@ export const updateStaffCarga = async (cedula, materias, status, validationData 
       body: JSON.stringify({ ...payload, auditor })
     });
     if (res.ok) {
+      updateLocalCacheOptimistically('UPDATE_CARGA', payload);
       return true;
     }
-    const errData = await res.json().catch(() => ({}));
-    console.error('Error al actualizar carga en servidor:', errData);
-    enqueueMutation('UPDATE_CARGA', payload, auditor);
-    return false;
+    if (res.status >= 502) {
+      updateLocalCacheOptimistically('UPDATE_CARGA', payload);
+      enqueueMutation('UPDATE_CARGA', payload, auditor);
+      return true;
+    }
+    const errMsg = await extractServerErrorMessage(res, 'No se pudo actualizar la carga académica en el servidor.');
+    console.error('Error al actualizar carga en servidor:', errMsg);
+    throw new Error(errMsg);
   } catch (err) {
-    console.warn('Carga guardada en cola offline (sin conexión):', err.message);
-    enqueueMutation('UPDATE_CARGA', payload, auditor);
-    return true;
+    if (err && err.name === 'TypeError') {
+      console.warn('Carga guardada en cola offline (sin conexión):', err.message);
+      updateLocalCacheOptimistically('UPDATE_CARGA', payload);
+      enqueueMutation('UPDATE_CARGA', payload, auditor);
+      return true;
+    }
+    throw err;
   }
 };
 
 export const deleteStaff = async (cedula) => {
   invalidateStaffCache();
   const auditor = getCurrentUser();
-  updateLocalCacheOptimistically('DELETE_STAFF', { cedula });
 
   try {
     const res = await fetch(`${API_URL}/docentes/${cedula}`, {
@@ -160,14 +181,24 @@ export const deleteStaff = async (cedula) => {
       body: JSON.stringify({ auditor })
     });
     if (res.ok) {
+      updateLocalCacheOptimistically('DELETE_STAFF', { cedula });
       return true;
     }
-    enqueueMutation('DELETE_STAFF', { cedula }, auditor);
-    return true;
+    if (res.status >= 502) {
+      updateLocalCacheOptimistically('DELETE_STAFF', { cedula });
+      enqueueMutation('DELETE_STAFF', { cedula }, auditor);
+      return true;
+    }
+    const errMsg = await extractServerErrorMessage(res, 'No se pudo eliminar el docente en el servidor.');
+    throw new Error(errMsg);
   } catch (error) {
-    console.warn("Docente eliminado localmente y encolado para sincronización:", error.message);
-    enqueueMutation('DELETE_STAFF', { cedula }, auditor);
-    return true;
+    if (error && error.name === 'TypeError') {
+      console.warn("Docente eliminado localmente y encolado para sincronización:", error.message);
+      updateLocalCacheOptimistically('DELETE_STAFF', { cedula });
+      enqueueMutation('DELETE_STAFF', { cedula }, auditor);
+      return true;
+    }
+    throw error;
   }
 };
 

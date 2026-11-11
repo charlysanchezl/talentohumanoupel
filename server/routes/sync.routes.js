@@ -379,19 +379,24 @@ router.post('/sync/batch', requireAuth, async (req, res) => {
             updateQuery += ', periodoAcademico = ?, semanas = ?, fechaDesde = ?, fechaHasta = ?';
             updateParams.push(periodoAcademico, parseInt(semanas) || 15, fechaDesde || '', fechaHasta || '');
           }
+          if (payload.especialidad !== undefined && String(payload.especialidad).trim() !== '') {
+            updateQuery += ', especialidad = ?';
+            updateParams.push(String(payload.especialidad).trim());
+          }
           updateQuery += ' WHERE cedula = ?';
           updateParams.push(targetCedula);
           await db.query(updateQuery, updateParams);
         } else {
           // Si el docente no existe aún en la base de datos central, registrar fila base para mantener integridad relacional
           await db.query(
-            'INSERT INTO docentes (cedula, nombres, apellidos, department, status, periodoAcademico, semanas, fechaDesde, fechaHasta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [targetCedula, payload.nombres || payload.nombre || 'Docente', payload.apellidos || '(Offline)', payload.department || payload.departamento || 'Docencia', status || 'Activo', periodoAcademico || '2026-I', parseInt(semanas) || 15, fechaDesde || '', fechaHasta || '']
+            'INSERT INTO docentes (cedula, nombres, apellidos, department, status, periodoAcademico, semanas, fechaDesde, fechaHasta, especialidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [targetCedula, payload.nombres || payload.nombre || 'Docente', payload.apellidos || '(Offline)', payload.department || payload.departamento || 'Docencia', status || 'Activo', periodoAcademico || '2026-I', parseInt(semanas) || 15, fechaDesde || '', fechaHasta || '', payload.especialidad || '']
           );
         }
 
         await db.query('DELETE FROM docentes_materias WHERE docente_cedula = ? OR docente_cedula = ? OR docente_cedula = ?', [targetCedula, vCedula, bareCedula]);
         const validMaterias = (materias || []).filter(m => m && (m.nombre || m.nom_Curso));
+        const targetPerSync = periodoAcademico || docRows[0]?.periodoAcademico || '2026-I';
         if (validMaterias.length > 0) {
           const materiasValues = validMaterias.map(m => [
             targetCedula,
@@ -401,9 +406,11 @@ router.post('/sync/batch', requireAuth, async (req, res) => {
             m.especialidadDestino || payload.especialidad || '',
             m.seccion || m.secciones || '',
             (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? String(m.cupos).trim() : null,
-            (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? parseInt(m.inscritos) : null
+            (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? parseInt(m.inscritos) : null,
+            (m.cohorte !== undefined && m.cohorte !== null && String(m.cohorte).trim() !== '') ? String(m.cohorte).trim() : null,
+            targetPerSync
           ]);
-          await db.query('INSERT INTO docentes_materias (docente_cedula, nombre, horasSemanal, horasLapso, especialidadDestino, seccion, cupos, inscritos) VALUES ?', [materiasValues]);
+          await db.query('INSERT INTO docentes_materias (docente_cedula, nombre, horasSemanal, horasLapso, especialidadDestino, seccion, cupos, inscritos, cohorte, periodoAcademico) VALUES ?', [materiasValues]);
         }
 
         try {

@@ -1,6 +1,31 @@
 import { useState } from 'react';
 import { updateStaffCarga, addMateriaCatalogo, getCatalogoMaterias } from '../data';
 
+/**
+ * Sincroniza la especialidad principal del docente con la especialidad destino de su carga
+ * cuando carece de especialidad previa, cambia frente a las materias previas o toda su carga
+ * oficial apunta de forma unívoca a una especialidad distinta.
+ */
+export function resolveSyncedEspecialidad(staffToValidate, cleanMaterias = []) {
+  const currentEsp = String(staffToValidate?.especialidad || '').trim();
+  const firstMatEsp = String(
+    cleanMaterias.find(m => m?.especialidadDestino && String(m.especialidadDestino).trim() !== '')?.especialidadDestino || ''
+  ).trim();
+  if (!firstMatEsp) return currentEsp;
+
+  const prevFirstMatEsp = String(
+    (staffToValidate?.materias || []).find(m => m?.especialidadDestino && String(m.especialidadDestino).trim() !== '')?.especialidadDestino || ''
+  ).trim();
+  const uniqueMatEsps = Array.from(
+    new Set(cleanMaterias.map(m => String(m?.especialidadDestino || '').trim()).filter(Boolean))
+  );
+
+  if (!currentEsp || firstMatEsp !== prevFirstMatEsp || (uniqueMatEsps.length === 1 && uniqueMatEsps[0] !== currentEsp)) {
+    return firstMatEsp;
+  }
+  return currentEsp;
+}
+
 export function useStaffValidation({
   academicPeriodsList = [],
   filterPeriodo = 'Todos',
@@ -156,30 +181,28 @@ export function useStaffValidation({
     }
 
     const cleanMaterias = materiasForm.filter(m => m.nombre && m.nombre.trim() !== '');
-    const firstMatEsp = cleanMaterias.find(m => m.especialidadDestino && m.especialidadDestino.trim() !== '')?.especialidadDestino;
-    const finalEspecialidad = staffToValidate.especialidad || firstMatEsp || '';
+    const finalEspecialidad = resolveSyncedEspecialidad(staffToValidate, cleanMaterias);
 
     try {
-      const updatedList = staffList.map(staff => {
-        if (staff.cedula === staffToValidate.cedula) {
-          return { 
-            ...staff, 
-            ...validationForm,
-            especialidad: finalEspecialidad,
-            materias: cleanMaterias, 
-            status: 'Activo'
-          };
-        }
-        return staff;
-      });
-      if (setStaffList) setStaffList(updatedList);
-
       const res = await updateStaffCarga(staffToValidate.cedula, cleanMaterias, 'Activo', {
         ...validationForm,
         especialidad: finalEspecialidad
       });
 
       if (res) {
+        const updatedList = staffList.map(staff => {
+          if (staff.cedula === staffToValidate.cedula) {
+            return { 
+              ...staff, 
+              ...validationForm,
+              especialidad: finalEspecialidad,
+              materias: cleanMaterias, 
+              status: 'Activo'
+            };
+          }
+          return staff;
+        });
+        if (setStaffList) setStaffList(updatedList);
         if (fetchStaff) await fetchStaff(filterPeriodo);
         if (staffToView && staffToView.cedula === staffToValidate.cedula && setStaffToView) {
           setStaffToView({
@@ -196,6 +219,7 @@ export function useStaffValidation({
       }
     } catch (error) {
       console.error("Error saving validation:", error);
+      alert(error?.message || 'Hubo un error al guardar en la base de datos.');
     } finally {
       setStaffToValidate(null);
     }
