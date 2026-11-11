@@ -40,25 +40,16 @@ fi
 
 mkdir -p /var/www/html
 
-echo "==> 2. Instalando/actualizando Certbot >= 5.3.0 (requerido para --ip-address)..."
-CERTBOT_BIN=""
-if command -v snap >/dev/null 2>&1; then
-  apt-get remove -y certbot 2>/dev/null || true
-  snap install core 2>/dev/null || snap refresh core 2>/dev/null || true
-  snap install --classic certbot 2>/dev/null || snap refresh certbot
-  ln -sf /snap/bin/certbot /usr/bin/certbot
-  CERTBOT_BIN="/snap/bin/certbot"
-else
-  python3 -m venv /opt/certbot
-  /opt/certbot/bin/pip install --upgrade pip certbot
-  ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
-  CERTBOT_BIN="/opt/certbot/bin/certbot"
-fi
+echo "==> 2. Instalando/actualizando Certbot >= 5.4.0 (vía Python venv, sin depender de Snap Store)..."
+CERTBOT_BIN="/opt/certbot/bin/certbot"
+python3 -m venv /opt/certbot
+/opt/certbot/bin/pip install --upgrade pip "certbot>=5.4.0"
+ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
 
 CERTBOT_VER="$($CERTBOT_BIN --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo '0.0.0')"
 echo "    Certbot instalado: $CERTBOT_VER"
-if ! python3 -c "import sys; v=tuple(map(int, '$CERTBOT_VER'.split('.'))); sys.exit(0 if v >= (5,3,0) else 1)"; then
-  echo "ERROR: Se requiere Certbot >= 5.3.0 para certificados por IP sin dominio (actual: $CERTBOT_VER)."
+if ! python3 -c "import sys; v=tuple(map(int, '$CERTBOT_VER'.split('.'))); sys.exit(0 if v >= (5,4,0) else 1)"; then
+  echo "ERROR: Se requiere Certbot >= 5.4.0 para certificados por IP sin dominio con webroot (actual: $CERTBOT_VER)."
   exit 1
 fi
 
@@ -192,14 +183,10 @@ nginx -t
 systemctl reload nginx
 
 echo "==> 6. Configurando renovación automática (cada 12h para certificados de 6 días)..."
-if systemctl list-unit-files | grep -q snap.certbot.renew.timer; then
-  systemctl enable --now snap.certbot.renew.timer
-else
-  cat > /etc/cron.d/certbot-sigoa-ip <<EOF
+cat > /etc/cron.d/certbot-sigoa-ip <<EOF
 0 */12 * * * root $CERTBOT_BIN renew -q --deploy-hook "systemctl reload nginx"
 EOF
-  chmod 644 /etc/cron.d/certbot-sigoa-ip
-fi
+chmod 644 /etc/cron.d/certbot-sigoa-ip
 
 "$CERTBOT_BIN" renew --dry-run || echo "AVISO: La simulación de renovación falló; verifica luego con: sudo $CERTBOT_BIN renew --dry-run"
 
