@@ -1,22 +1,24 @@
-import React, { Suspense, lazy, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/ToastContainer';
 import MaintenanceLockscreen from './components/MaintenanceLockscreen';
+import ErrorBoundary from './components/ErrorBoundary';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 import { getCurrentUser } from './data';
 import './index.css';
 
-// Lazy loading para optimización (Code Splitting)
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const StaffList = lazy(() => import('./components/StaffList'));
-const PublicRegistration = lazy(() => import('./components/PublicRegistration'));
-const Login = lazy(() => import('./components/Login'));
-const UserManagement = lazy(() => import('./components/UserManagement'));
-const ConsultarDocentes = lazy(() => import('./components/ConsultarDocentes'));
-const ProgramacionAcademica = lazy(() => import('./components/ProgramacionAcademica'));
-const AuditLogs = lazy(() => import('./components/AuditLogs'));
-const BackupVault = lazy(() => import('./components/BackupVault'));
-const MeshP2PControl = lazy(() => import('./components/MeshP2PControl'));
+// Lazy loading para optimización (Code Splitting con auto-recarga ante nuevo deploy)
+const Dashboard = lazyWithRetry(() => import('./components/Dashboard'));
+const StaffList = lazyWithRetry(() => import('./components/StaffList'));
+const PublicRegistration = lazyWithRetry(() => import('./components/PublicRegistration'));
+const Login = lazyWithRetry(() => import('./components/Login'));
+const UserManagement = lazyWithRetry(() => import('./components/UserManagement'));
+const ConsultarDocentes = lazyWithRetry(() => import('./components/ConsultarDocentes'));
+const ProgramacionAcademica = lazyWithRetry(() => import('./components/ProgramacionAcademica'));
+const AuditLogs = lazyWithRetry(() => import('./components/AuditLogs'));
+const BackupVault = lazyWithRetry(() => import('./components/BackupVault'));
+const MeshP2PControl = lazyWithRetry(() => import('./components/MeshP2PControl'));
 
 const ProtectedRoute = ({ children, requiredRole }) => {
   const user = getCurrentUser();
@@ -151,7 +153,7 @@ const PortalDocenteRoute = () => {
 
 function App() {
   return (
-    <>
+    <ErrorBoundary>
       <ToastContainer />
       <BrowserRouter>
       <Suspense fallback={
@@ -183,7 +185,7 @@ function App() {
         </Routes>
       </Suspense>
       </BrowserRouter>
-    </>
+    </ErrorBoundary>
   );
 }
 

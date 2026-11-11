@@ -1,37 +1,27 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw, Home, ShieldAlert, ChevronDown, ChevronUp } from 'lucide-react';
 
-export class ErrorBoundary extends React.Component {
+class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-      showDetails: false
-    };
+    this.state = { hasError: false, errorMessage: '' };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return {
+      hasError: true,
+      errorMessage: error?.message || 'Error inesperado al cargar el módulo.'
+    };
   }
 
-  componentDidCatch(error, errorInfo) {
-    console.error('ErrorBoundary capturó una excepción en la interfaz:', error, errorInfo);
-    this.setState({ errorInfo });
+  componentDidCatch(error, info) {
+    console.error('[SIGOA_UI_ERROR]', error, info);
   }
 
   handleReload = () => {
+    try {
+      window.sessionStorage.removeItem('sigoa_chunk_reload_at');
+    } catch (_) {}
     window.location.reload();
-  };
-
-  handleGoHome = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null });
-    window.location.href = '/';
-  };
-
-  toggleDetails = () => {
-    this.setState(prev => ({ showDetails: !prev.showDetails }));
   };
 
   render() {
@@ -42,156 +32,52 @@ export class ErrorBoundary extends React.Component {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #003366 100%)',
-          padding: '1.5rem',
-          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          color: '#f8fafc'
+          background: '#f8fafc',
+          padding: '1.5rem'
         }}>
           <div style={{
-            maxWidth: '620px',
+            maxWidth: '520px',
             width: '100%',
-            background: 'rgba(30, 41, 59, 0.85)',
-            backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: '20px',
-            padding: '2.5rem 2rem',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(217, 119, 6, 0.2)',
+            background: '#ffffff',
+            borderRadius: '14px',
+            padding: '2rem',
+            boxShadow: '0 10px 25px rgba(15, 23, 42, 0.08)',
+            border: '1px solid #e2e8f0',
             textAlign: 'center'
           }}>
-            {/* Icono de escudo de seguridad UPEL */}
-            <div style={{
-              width: '72px',
-              height: '72px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.2) 0%, rgba(239, 68, 68, 0.2) 100%)',
-              border: '2px solid rgba(217, 119, 6, 0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 1.5rem auto'
-            }}>
-              <ShieldAlert size={38} color="#f59e0b" />
-            </div>
-
-            <h1 style={{
-              fontSize: '1.6rem',
-              fontWeight: '700',
-              margin: '0 0 0.75rem 0',
-              color: '#ffffff',
-              letterSpacing: '-0.02em'
-            }}>
-              Inconveniente Inesperado en la Interfaz
-            </h1>
-
-            <p style={{
-              fontSize: '0.95rem',
-              color: '#94a3b8',
-              lineHeight: '1.6',
-              margin: '0 0 1.75rem 0'
-            }}>
-              El sistema <strong style={{ color: '#cbd5e1' }}>UPEL SIGOA</strong> protegió su sesión.
-              Sus datos guardados en la base de datos están completamente seguros y no han sufrido alteraciones.
+            <h2 style={{ marginTop: 0, color: '#002f6c', fontSize: '1.35rem' }}>
+              Actualización disponible en SIGOA
+            </h2>
+            <p style={{ color: '#475569', fontSize: '0.95rem', lineHeight: 1.5 }}>
+              Una vista del sistema no pudo cargarse (frecuente tras una actualización reciente en el servidor). Haz clic en recargar para obtener la última versión.
             </p>
-
-            {/* Acciones principales */}
             <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-              justifyContent: 'center',
-              marginBottom: '1.5rem'
+              background: '#f1f5f9',
+              color: '#334155',
+              padding: '0.65rem 0.85rem',
+              borderRadius: '8px',
+              fontSize: '0.8rem',
+              marginBottom: '1.25rem',
+              wordBreak: 'break-word'
             }}>
-              <button
-                onClick={this.handleReload}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.75rem 1.4rem',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  color: '#ffffff',
-                  background: 'linear-gradient(135deg, #003366 0%, #00509e 100%)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0, 51, 102, 0.4)',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <RefreshCw size={17} />
-                Recargar y Continuar
-              </button>
-
-              <button
-                onClick={this.handleGoHome}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.75rem 1.4rem',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  color: '#f8fafc',
-                  background: 'rgba(51, 65, 85, 0.8)',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <Home size={17} />
-                Regresar al Inicio
-              </button>
+              {this.state.errorMessage}
             </div>
-
-            {/* Detalles técnicos desplegables */}
-            <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '1.25rem' }}>
-              <button
-                onClick={this.toggleDetails}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#64748b',
-                  fontSize: '0.82rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  cursor: 'pointer',
-                  padding: '0.25rem 0.5rem'
-                }}
-              >
-                {this.state.showDetails ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                {this.state.showDetails ? 'Ocultar información técnica' : 'Ver información técnica del error'}
-              </button>
-
-              {this.state.showDetails && (
-                <div style={{
-                  marginTop: '0.75rem',
-                  textAlign: 'left',
-                  background: 'rgba(15, 23, 42, 0.95)',
-                  borderRadius: '10px',
-                  padding: '1rem',
-                  border: '1px solid rgba(255, 255, 255, 0.05)',
-                  maxHeight: '220px',
-                  overflowY: 'auto'
-                }}>
-                  <div style={{ color: '#ef4444', fontWeight: '600', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                    {this.state.error?.toString()}
-                  </div>
-                  <pre style={{
-                    color: '#94a3b8',
-                    fontSize: '0.75rem',
-                    margin: 0,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    fontFamily: 'monospace'
-                  }}>
-                    {this.state.errorInfo?.componentStack || 'No component stack disponible'}
-                  </pre>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={this.handleReload}
+              className="btn btn-primary"
+              style={{
+                background: '#002f6c',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.7rem 1.4rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Recargar Sistema
+            </button>
           </div>
         </div>
       );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { 
   getStaffData, 
   getCurrentUser, 
@@ -15,6 +15,7 @@ import { matchesSearch } from '../utils/searchHelper';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
 import { buildAuditorExportData, buildOfertaExportData } from '../utils/staffExcelExportHelper';
 import { useStaffValidation } from '../hooks/useStaffValidation';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 
 // Subcomponentes modulares reutilizables de Staff
 import ConsultarDocentesFilterBar from './staff/ConsultarDocentesFilterBar';
@@ -22,18 +23,18 @@ import ConsultarDocentesTable from './staff/ConsultarDocentesTable';
 import StaffOfertaTable from './staff/StaffOfertaTable';
 import StaffActionMenuPortal from './staff/StaffActionMenuPortal';
 
-// Modales con carga bajo demanda (Code Splitting y Lazy Loading)
-const StaffDetailModal = lazy(() => import('./staff/StaffDetailModal'));
-const StaffEditModal = lazy(() => import('./staff/StaffEditModal'));
-const StaffValidateModal = lazy(() => import('./staff/StaffValidateModal'));
-const PrintableFicha = lazy(() => import('./PrintableFicha'));
-const ExcelPreviewModal = lazy(() => import('./ExcelPreviewModal'));
-const NotificationModal = lazy(() => import('./NotificationModal'));
-const SendFichaEmailModal = lazy(() => import('./SendFichaEmailModal'));
-const ReplicatePeriodModal = lazy(() => import('./ReplicatePeriodModal'));
-const TeacherHistoryModal = lazy(() => import('./TeacherHistoryModal'));
-const PeriodManagementModal = lazy(() => import('./PeriodManagementModal'));
-const BankTxtModal = lazy(() => import('./BankTxtModal'));
+// Modales con carga bajo demanda (Code Splitting y Lazy Loading con auto-recarga)
+const StaffDetailModal = lazyWithRetry(() => import('./staff/StaffDetailModal'));
+const StaffEditModal = lazyWithRetry(() => import('./staff/StaffEditModal'));
+const StaffValidateModal = lazyWithRetry(() => import('./staff/StaffValidateModal'));
+const PrintableFicha = lazyWithRetry(() => import('./PrintableFicha'));
+const ExcelPreviewModal = lazyWithRetry(() => import('./ExcelPreviewModal'));
+const NotificationModal = lazyWithRetry(() => import('./NotificationModal'));
+const SendFichaEmailModal = lazyWithRetry(() => import('./SendFichaEmailModal'));
+const ReplicatePeriodModal = lazyWithRetry(() => import('./ReplicatePeriodModal'));
+const TeacherHistoryModal = lazyWithRetry(() => import('./TeacherHistoryModal'));
+const PeriodManagementModal = lazyWithRetry(() => import('./PeriodManagementModal'));
+const BankTxtModal = lazyWithRetry(() => import('./BankTxtModal'));
 
 function useDebounce(value, delay) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -389,18 +390,22 @@ const ConsultarDocentes = () => {
     <div className="animate-fade-in">
       <Suspense fallback={null}>
         {/* Notificaciones y mensajería */}
-        <NotificationModal 
-          isOpen={!!staffToNotify}
-          staff={staffToNotify}
-          onClose={() => setStaffToNotify(null)}
-        />
+        {staffToNotify && (
+          <NotificationModal 
+            isOpen={true}
+            staff={staffToNotify}
+            onClose={() => setStaffToNotify(null)}
+          />
+        )}
 
-        <SendFichaEmailModal 
-          isOpen={!!staffToSendFicha}
-          staff={staffToSendFicha}
-          jefeName={user?.name || 'Jefe de Departamento'}
-          onClose={() => setStaffToSendFicha(null)}
-        />
+        {staffToSendFicha && (
+          <SendFichaEmailModal 
+            isOpen={true}
+            staff={staffToSendFicha}
+            jefeName={user?.name || 'Jefe de Departamento'}
+            onClose={() => setStaffToSendFicha(null)}
+          />
+        )}
 
         {/* Modal de Previsualización Excel */}
         {previewData && (
@@ -530,42 +535,48 @@ const ConsultarDocentes = () => {
 
       {/* Modales y Portales modulares */}
       <Suspense fallback={null}>
-        <StaffDetailModal
-          staffToView={staffToView}
-          setStaffToView={setStaffToView}
-          setStaffToEdit={setStaffToEdit}
-          handleDelete={handleDelete}
-          setStaffToPrint={setStaffToPrint}
-          user={user}
-        />
+        {staffToView && (
+          <StaffDetailModal
+            staffToView={staffToView}
+            setStaffToView={setStaffToView}
+            setStaffToEdit={setStaffToEdit}
+            handleDelete={handleDelete}
+            setStaffToPrint={setStaffToPrint}
+            user={user}
+          />
+        )}
 
-        <StaffEditModal
-          staffToEdit={staffToEdit}
-          setStaffToEdit={setStaffToEdit}
-          handleEditChange={handleEditChange}
-          handleSaveEdit={handleSaveEdit}
-          handleDelete={handleDelete}
-          user={user}
-        />
+        {staffToEdit && (
+          <StaffEditModal
+            staffToEdit={staffToEdit}
+            setStaffToEdit={setStaffToEdit}
+            handleEditChange={handleEditChange}
+            handleSaveEdit={handleSaveEdit}
+            handleDelete={handleDelete}
+            user={user}
+          />
+        )}
 
-        <StaffValidateModal
-          staffToValidate={staffToValidate}
-          setStaffToValidate={setStaffToValidate}
-          setStaffToEdit={setStaffToEdit}
-          setStaffHistoryToView={setStaffHistoryToView}
-          validationForm={validationForm}
-          handleValidationFormChange={handleValidationFormChange}
-          materiasForm={materiasForm}
-          handleMateriaChange={handleMateriaChange}
-          removeMateria={removeMateria}
-          addMateria={addMateria}
-          handleAddMateriaGlobal={handleAddMateriaGlobal}
-          handleSaveValidation={handleSaveValidation}
-          academicPeriodsList={academicPeriodsList}
-          academicPeriods={academicPeriods}
-          cursosList={cursosList}
-          user={user}
-        />
+        {staffToValidate && (
+          <StaffValidateModal
+            staffToValidate={staffToValidate}
+            setStaffToValidate={setStaffToValidate}
+            setStaffToEdit={setStaffToEdit}
+            setStaffHistoryToView={setStaffHistoryToView}
+            validationForm={validationForm}
+            handleValidationFormChange={handleValidationFormChange}
+            materiasForm={materiasForm}
+            handleMateriaChange={handleMateriaChange}
+            removeMateria={removeMateria}
+            addMateria={addMateria}
+            handleAddMateriaGlobal={handleAddMateriaGlobal}
+            handleSaveValidation={handleSaveValidation}
+            academicPeriodsList={academicPeriodsList}
+            academicPeriods={academicPeriods}
+            cursosList={cursosList}
+            user={user}
+          />
+        )}
       </Suspense>
 
       <StaffActionMenuPortal

@@ -111,7 +111,15 @@ if (fs.existsSync(distPath)) {
       }
     }
   }));
-  app.get(/^(?!\/api).+/, (req, res) => {
+  app.get(/^(?!\/api).+/, (req, res, next) => {
+    // Nunca devolver index.html ante chunks JS/CSS/estáticos inexistentes (evita MIME errors tras un deploy)
+    if (
+      req.path.startsWith('/assets/') ||
+      /\.(js|mjs|css|map|json|png|jpe?g|svg|gif|ico|woff2?|ttf|pdf|mp4)$/i.test(req.path)
+    ) {
+      return res.status(404).end();
+    }
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
