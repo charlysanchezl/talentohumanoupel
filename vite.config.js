@@ -15,22 +15,8 @@ export default defineConfig({
     }
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('exceljs')) return 'vendor-exceljs';
-            if (id.includes('xlsx')) return 'vendor-xlsx';
-            if (id.includes('jspdf')) return 'vendor-pdf';
-            if (id.includes('recharts')) return 'vendor-charts';
-            if (id.includes('qrcode')) return 'vendor-qr';
-            if (id.includes('lucide-react')) return 'vendor-icons';
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor-react';
-            return 'vendor'; // El resto de dependencias menores
-          }
-        }
-      }
-    },
-    chunkSizeWarningLimit: 1000 // Aumentamos el límite de advertencia a 1MB ya que separamos el XLSX
+    // Vite 8 / Rolldown realiza code-splitting automático sin enlaces cruzados:
+    // exceljs, xlsx y jspdf solo se descargan bajo demanda al pulsar Exportar.
+    chunkSizeWarningLimit: 1000
   }
 })

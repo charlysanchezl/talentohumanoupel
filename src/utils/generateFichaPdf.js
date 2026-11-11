@@ -1,8 +1,10 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { getDocenteInstitutionalEmail } from './fichaEmailTemplate';
 
 export const generateFichaPdf = async (staff, options = {}) => {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable')
+  ]);
   const { jefeName = 'Jefe de Departamento', periodInfo = null } = options;
   const targetPeriodo = periodInfo?.nombre || staff.periodoAcademico || '2026-I';
   const targetSemanas = periodInfo?.semanas || staff.semanas || 15;

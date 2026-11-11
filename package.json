@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "test": "npm run test --prefix server",
+    "test:e2e": "node --test tests/e2e/*.e2e.mjs",
     "backup": "node server/scripts/backup_automatizado.js",
     "preview": "vite preview"
   },

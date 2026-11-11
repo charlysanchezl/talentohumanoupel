@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, FileSpreadsheet, FileText } from 'lucide-react';
-import ExcelJS from 'exceljs';
-import * as XLSX from 'xlsx-js-style';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 const ExcelPreviewModal = ({ 
   isOpen, 
@@ -24,6 +20,7 @@ const ExcelPreviewModal = ({
 
   const handleDownload = async () => {
     try {
+      const { default: ExcelJS } = await import('exceljs');
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'UPEL Talento Humano';
       workbook.created = new Date();
@@ -172,6 +169,8 @@ const ExcelPreviewModal = ({
       console.error('Error generando Excel con ExcelJS, usando respaldo XLSX:', error);
       // Respaldo con xlsx-js-style en caso de error
       try {
+        const xlsxMod = await import('xlsx-js-style');
+        const XLSX = xlsxMod.default?.utils ? xlsxMod.default : xlsxMod;
         const allRows = [...headerRows, ...dataRows];
         const worksheet = XLSX.utils.aoa_to_sheet(allRows);
         const titleRowIndex = headerRows.length - 1;
@@ -227,6 +226,10 @@ const ExcelPreviewModal = ({
 
   const handleDownloadPDF = async () => {
     try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable')
+      ]);
       const doc = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',

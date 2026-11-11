@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { 
   BookOpen, Search, Printer, Download, MapPin, AlertTriangle, 
   CheckCircle2, BarChart3, FileSpreadsheet, Layers, Building2, 
@@ -17,9 +18,9 @@ import {
   getNecesidadesDocentesData,
   normalizeDepartmentName
 } from '../data';
-import * as XLSX from 'xlsx-js-style';
-import ExcelPreviewModal from './ExcelPreviewModal';
 import { formatFechaEspanol } from '../utils/staffExcelExportHelper';
+
+const ExcelPreviewModal = lazyWithRetry(() => import('./ExcelPreviewModal'));
 
 const ProgramacionAcademica = () => {
   const [activeTab, setActiveTab] = useState('oferta'); // 'oferta' | 'huerfanas' | 'consejo'
@@ -1472,15 +1473,17 @@ const ProgramacionAcademica = () => {
 
       {/* MODAL DE VISTA PREVIA EXCEL / PDF */}
       {previewData && (
-        <ExcelPreviewModal 
-          isOpen={true}
-          onClose={() => setPreviewData(null)}
-          headerRows={previewData.headerRows}
-          dataRows={previewData.dataRows}
-          colsWidth={previewData.colsWidth}
-          fileName={previewData.fileName}
-          title="Vista Previa de Exportación Institucional"
-        />
+        <Suspense fallback={null}>
+          <ExcelPreviewModal 
+            isOpen={true}
+            onClose={() => setPreviewData(null)}
+            headerRows={previewData.headerRows}
+            dataRows={previewData.dataRows}
+            colsWidth={previewData.colsWidth}
+            fileName={previewData.fileName}
+            title="Vista Previa de Exportación Institucional"
+          />
+        </Suspense>
       )}
 
       <style>{`
