@@ -621,9 +621,8 @@ const StaffList = () => {
 
       if (staff.materias && staff.materias.length > 0) {
         staff.materias.forEach(mat => {
-          const matchesDept = currentDept === 'Todos' || 
-            matchDepartment(staff.department, currentDept) || 
-            matchDepartment(mat.especialidadDestino, currentDept);
+          const matchesDept = currentDept === 'Todos' ||
+            matchDepartment(staff.department, currentDept);
           if (!matchesDept) return;
 
           if (debouncedSearchTerm.trim()) {

@@ -175,11 +175,7 @@ const ConsultarDocentes = () => {
     return staffList
       .filter(staff => {
         if (user && user.role === 'JEFE' && user.department) {
-          const isMyDept = matchDepartment(staff.department, user.department);
-          const hasMatInMyDept = (staff.materias || []).some(m => 
-            matchDepartment(m.especialidadDestino, user.department)
-          );
-          if (!isMyDept && !hasMatInMyDept) return false;
+          if (!matchDepartment(staff.department, user.department)) return false;
         }
 
         if (filterPeriodo !== 'Todos') {
@@ -189,11 +185,7 @@ const ConsultarDocentes = () => {
         }
 
         if (filterDepartment !== 'Todos') {
-          const matchDept = matchDepartment(staff.department, filterDepartment);
-          const hasMatInDept = (staff.materias || []).some(m => 
-            matchDepartment(m.especialidadDestino, filterDepartment)
-          );
-          if (!matchDept && !hasMatInDept) return false;
+          if (!matchDepartment(staff.department, filterDepartment)) return false;
         }
 
         if (filterSede !== 'Todos' && staff.sedeCentro !== filterSede) return false;
@@ -236,11 +228,7 @@ const ConsultarDocentes = () => {
 
     staffList.forEach(staff => {
       if (user && user.role === 'JEFE' && user.department) {
-        const isMyDept = matchDepartment(staff.department, user.department);
-        const hasMatInMyDept = (staff.materias || []).some(m => 
-          matchDepartment(m.especialidadDestino, user.department)
-        );
-        if (!isMyDept && !hasMatInMyDept) return;
+        if (!matchDepartment(staff.department, user.department)) return;
       }
 
       if (filterSede !== 'Todos' && staff.sedeCentro !== filterSede) return;
@@ -266,9 +254,7 @@ const ConsultarDocentes = () => {
         }
 
         if (filterDepartment !== 'Todos') {
-          const matchesTeacherDept = matchDepartment(staff.department, filterDepartment);
-          const matchesMateriaDept = matchDepartment(mat.especialidadDestino, filterDepartment);
-          if (!matchesTeacherDept && !matchesMateriaDept) return;
+          if (!matchDepartment(staff.department, filterDepartment)) return;
         }
 
         if (debouncedSearchTerm.trim()) {
