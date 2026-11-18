@@ -674,7 +674,9 @@ const ProgramacionAcademica = () => {
                   value={filterPeriodo} 
                   onChange={(e) => setFilterPeriodo(e.target.value)}
                 >
-                  <option value="Todos">Todos los Períodos</option>
+                  <option value="Todos">
+                    {currentActivePeriod ? `Período Activo (${currentActivePeriod})` : 'Período Activo'}
+                  </option>
                   {academicPeriodsList.length > 0 ? (
                     academicPeriodsList.map(p => (
                       <option key={p.id || p.nombre} value={p.nombre}>

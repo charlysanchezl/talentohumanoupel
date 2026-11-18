@@ -14,8 +14,10 @@ import {
   getInstitutionalHeaderSubtitle, 
   getAcademicPeriodsList, 
   isExpedienteCompleto, 
-  getMissingExpedienteFields 
+  getMissingExpedienteFields,
+  invalidateStaffCache 
 } from '../data';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { matchesSearch } from '../utils/searchHelper';
 import { resolveSyncedEspecialidad } from '../hooks/useStaffValidation';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
@@ -132,6 +134,11 @@ const StaffList = () => {
   useEffect(() => {
     fetchData(filterPeriodo);
   }, [currentDept, filterPeriodo]);
+
+  useRealtimeSync(() => {
+    invalidateStaffCache();
+    fetchData(filterPeriodo);
+  });
 
   useEffect(() => {
     setCurrentPageDocentes(1);

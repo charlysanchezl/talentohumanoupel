@@ -37,10 +37,12 @@ export const getAuthHeaders = (extraHeaders = {}) => {
 let inMemoryStaffCache = null;
 let inMemoryStaffPeriodo = null;
 let lastFetchTimestamp = 0;
+let lastKnownActivePeriod = null;
 const MEMORY_CACHE_TTL = 15000; // 15s de respuesta inmediata al navegar entre pestañas
 
 export const invalidateStaffCache = () => {
   inMemoryStaffCache = null;
+  inMemoryStaffPeriodo = null;
   lastFetchTimestamp = 0;
 };
 
@@ -68,28 +70,30 @@ export const getStaffData = async (periodo) => {
         ...d,
         department: normalizeDepartmentName(d.department)
       }));
-      setCachedStaff(data); // Actualizar siempre con datos frescos del servidor
+      setCachedStaff(data, targetPeriodo); // Actualizar siempre con datos frescos del servidor por período
       inMemoryStaffCache = data;
       inMemoryStaffPeriodo = targetPeriodo;
       lastFetchTimestamp = Date.now();
       return data;
     }
-    // Si el backend responde con error, recurrir a la caché local (IndexedDB)
-    const cached = await getCachedStaffAsync();
+    // Si el backend responde con error, recurrir a la caché local (IndexedDB) del mismo período
+    const cached = await getCachedStaffAsync(targetPeriodo);
     if (cached) {
       const normalizedCached = (Array.isArray(cached) ? cached : []).map(d => ({
         ...d,
         department: normalizeDepartmentName(d.department)
       }));
       inMemoryStaffCache = normalizedCached;
+      inMemoryStaffPeriodo = targetPeriodo;
       return normalizedCached;
     }
     return [];
   } catch (err) {
     console.warn('Backend inaccesible, sirviendo personal desde caché local offline (IndexedDB):', err.message);
-    const cached = await getCachedStaffAsync();
+    const cached = await getCachedStaffAsync(targetPeriodo);
     if (cached) {
       inMemoryStaffCache = cached;
+      inMemoryStaffPeriodo = targetPeriodo;
       return cached;
     }
     return [];
@@ -321,7 +325,17 @@ export const getAvailableHistoricalPeriods = async () => {
 export const getAcademicPeriodsList = async () => {
   try {
     const res = await fetch(`${API_URL}/periodos`);
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      const periods = await res.json();
+      const activeName = Array.isArray(periods)
+        ? (periods.find(p => p.estado === 'ACTIVO')?.nombre || null)
+        : null;
+      if (activeName && lastKnownActivePeriod && activeName !== lastKnownActivePeriod) {
+        invalidateStaffCache();
+      }
+      if (activeName) lastKnownActivePeriod = activeName;
+      return periods;
+    }
     return [];
   } catch (err) {
     console.error('Error fetching academic periods list:', err);
@@ -390,7 +404,11 @@ export const closeAcademicPeriod = async (id, { motivo } = {}) => {
       headers: getAuthHeaders(),
       body: JSON.stringify({ auditor, motivo })
     });
-    return await res.json();
+    const data = await res.json();
+    if (data && data.success) {
+      invalidateStaffCache();
+    }
+    return data;
   } catch (err) {
     console.error('Error closing academic period:', err);
     return { success: false, error: err.message };
@@ -405,7 +423,11 @@ export const reactivateAcademicPeriod = async (id, { motivo } = {}) => {
       headers: getAuthHeaders(),
       body: JSON.stringify({ auditor, motivo })
     });
-    return await res.json();
+    const data = await res.json();
+    if (data && data.success) {
+      invalidateStaffCache();
+    }
+    return data;
   } catch (err) {
     console.error('Error reactivating academic period:', err);
     return { success: false, error: err.message };

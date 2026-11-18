@@ -1,0 +1,42 @@
+name: SIGOA CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm ci --prefix server
+
+      - name: Run backend unit tests
+        run: node --test server/tests/unit_interceptor.test.js
+
+      - name: Run frontend unit tests
+        run: npm run test:unit
+
+      - name: Build frontend (Vite)
+        run: npm run build
+
+      - name: Install Chromium for E2E CDP tests
+        run: sudo apt-get update && sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+
+      - name: Run E2E browser tests (CDP)
+        run: node --test tests/e2e/frontend.e2e.mjs

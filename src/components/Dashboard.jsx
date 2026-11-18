@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, AlertTriangle, CheckCircle, Clock, Download, Database, TrendingUp, MoreVertical, ChevronRight, ChevronDown, Image as ImageIcon, Eye, X, MapPin, FileText, FileSpreadsheet, Sparkles, CalendarOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { getStaffData, getCurrentUser, getAuthHeaders, sedesInstitucionales, getInstitutionalHeaderSubtitle, getUsers, getCatalogoMaterias, getAcademicPeriodsList, splitDepartments, matchDepartment, API_URL } from '../data';
+import { getStaffData, getCurrentUser, getAuthHeaders, sedesInstitucionales, getInstitutionalHeaderSubtitle, getUsers, getCatalogoMaterias, getAcademicPeriodsList, splitDepartments, matchDepartment, invalidateStaffCache, API_URL } from '../data';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 const Dashboard = () => {
   const [staffList, setStaffList] = useState([]);
@@ -46,6 +47,16 @@ const Dashboard = () => {
     };
     fetchData();
   }, [filterPeriodo]);
+
+  useRealtimeSync(async () => {
+    invalidateStaffCache();
+    const [data, periodsData] = await Promise.all([
+      getStaffData(filterPeriodo),
+      getAcademicPeriodsList()
+    ]);
+    if (Array.isArray(data)) setStaffList(data);
+    if (Array.isArray(periodsData)) setAcademicPeriodsList(periodsData);
+  });
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -688,7 +699,9 @@ const Dashboard = () => {
             onChange={(e) => setFilterPeriodo(e.target.value)}
             style={{ minWidth: '150px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
           >
-            <option value="Todos">Todos los Períodos</option>
+            <option value="Todos">
+              {activePeriod ? `Período Activo (${activePeriod.nombre})` : 'Período Activo'}
+            </option>
             {academicPeriodsList.length > 0 ? (
               academicPeriodsList.map(p => (
                 <option key={p.id || p.nombre} value={p.nombre}>

@@ -191,8 +191,9 @@ test('E2E Frontend SIGOA (Arquitectura, Navegación y Code Splitting)', async (t
       await browser.evaluate(setReactInputValue('input[type="password"]', 'AdminTest123!'));
       await browser.evaluate(`document.querySelector('form button[type="submit"]').click()`);
 
-      // Debe redirigir a Dashboard (/) tras autenticar
+      // Debe redirigir a Dashboard (/) tras autenticar y mostrar la etiqueta real del Período Activo
       await browser.waitForFunction(`window.location.pathname === '/' && document.body.innerText.includes('Panel')`);
+      await browser.waitForFunction(`document.body.innerText.includes('Período Activo (2026-I)')`, 10000);
 
       // Navegación SPA mediante enlaces reales o History API entre módulos críticos
       const routesToCheck = [

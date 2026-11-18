@@ -38,7 +38,11 @@ const StaffToolbar = ({
           onChange={(e) => setFilterPeriodo(e.target.value)}
           style={{ minWidth: '180px' }}
         >
-          <option value="Todos">Todos los Períodos</option>
+          <option value="Todos">
+            {academicPeriodsList.find(p => p.estado === 'ACTIVO')
+              ? `Período Activo (${academicPeriodsList.find(p => p.estado === 'ACTIVO').nombre})`
+              : 'Período Activo'}
+          </option>
           {academicPeriodsList.length > 0 ? (
             academicPeriodsList.map(p => (
               <option key={p.id || p.nombre} value={p.nombre}>

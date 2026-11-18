@@ -6,17 +6,25 @@
 // Memoria de control de peticiones por IP (Rate Limiter liviano nativo)
 const rateLimitStore = new Map();
 
+const TRUSTED_PROXY_IPS = new Set(['127.0.0.1', '::1', 'localhost']);
+
 /**
- * Obtiene la dirección IP real del cliente detrás de proxies o túneles
+ * Obtiene la dirección IP real del cliente detrás de proxies o túneles de confianza.
+ * Nunca confía en cabeceras X-Forwarded-For / X-Real-IP si la conexión directa no proviene de un proxy local.
  */
 function getClientIp(req) {
+  const socketIp = String(req.socket?.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '').trim();
+  if (!TRUSTED_PROXY_IPS.has(socketIp)) {
+    return socketIp;
+  }
+
   const cfIp = req.headers['cf-connecting-ip'];
   if (cfIp) return String(cfIp).trim();
   const realIp = req.headers['x-real-ip'];
   if (realIp) return String(realIp).trim();
   const forwarded = req.headers['x-forwarded-for'];
-  const raw = forwarded ? forwarded.split(',')[0].trim() : (req.socket?.remoteAddress || '127.0.0.1');
-  return raw.replace(/^::ffff:/, '');
+  if (forwarded) return forwarded.split(',')[0].trim().replace(/^::ffff:/, '');
+  return socketIp;
 }
 
 /**
@@ -26,8 +34,11 @@ function getClientIp(req) {
 function securityHeaders(req, res, next) {
   // Evitar que la página sea embebida en iframes externos (Clickjacking)
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self'");
   // Evitar que el navegador intente adivinar el tipo MIME (MIME Sniffing)
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Evitar apertura automática de descargas en IE/Edge legacy
+  res.setHeader('X-Download-Options', 'noopen');
   // Filtro XSS legacy para navegadores antiguos
   res.setHeader('X-XSS-Protection', '1; mode=block');
   // Limitar la información del referente
@@ -56,8 +67,9 @@ function securityHeaders(req, res, next) {
 function createRateLimiter(maxRequests = 60, windowMs = 15 * 60 * 1000, message = 'Demasiadas solicitudes. Por favor intente más tarde.') {
   return (req, res, next) => {
     const ip = getClientIp(req);
-    // En entorno localhost se desactiva el límite estricto para no entorpecer pruebas
-    if (['127.0.0.1', '::1', 'localhost', '::ffff:127.0.0.1'].includes(ip)) {
+    const hasProxyHeaders = Boolean(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers['cf-connecting-ip']);
+    // En entorno localhost directo (sin cabeceras de proxy) se desactiva el límite para no entorpecer pruebas
+    if (!hasProxyHeaders && ['127.0.0.1', '::1', 'localhost'].includes(ip)) {
       return next();
     }
 

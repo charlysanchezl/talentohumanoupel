@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const { requireRole, requireStaffAuth } = require('../middlewares/auth');
 const { logAction } = require('../services/auditService');
 const { invalidateDocentesCache } = require('../services/docentesCache.service');
+const { broadcastRealtimeUpdate } = require('../services/realtimeSync.service');
 const { normalizeDepartmentName } = require('../utils/normalizer');
 const { writeSqlDumpToFile } = require('../services/backupDump.service');
 
@@ -99,6 +100,7 @@ async function cerrarPeriodoSeguro(periodoObj, auditor = null, motivo = 'Cierre 
   );
 
   invalidateDocentesCache();
+  broadcastRealtimeUpdate('periodos', { periodo: periodoObj.nombre, action: 'cerrar' });
 }
 
 async function verificarCierreAutomaticoLapsos() {
@@ -143,6 +145,15 @@ router.post('/periodos/replicar', requireRole(['ADMIN', 'JEFE']), async (req, re
 
     if (!periodoOrigen || !periodoDestino) {
       return res.status(400).json({ error: 'Debes indicar el período origen y el período destino.' });
+    }
+
+    if (String(periodoOrigen).trim() === String(periodoDestino).trim()) {
+      return res.status(400).json({ error: 'El período origen y el período destino no pueden ser el mismo.' });
+    }
+
+    const [destCheck] = await db.query('SELECT estado FROM periodos_academicos WHERE nombre = ? LIMIT 1', [periodoDestino]);
+    if (destCheck.length > 0 && destCheck[0].estado === 'CERRADO') {
+      return res.status(400).json({ error: `Operación bloqueada: El período destino "${periodoDestino}" está CERRADO.` });
     }
 
     if (!cedulasSeleccionadas || cedulasSeleccionadas.length === 0) {
@@ -301,6 +312,7 @@ router.post('/periodos/replicar', requireRole(['ADMIN', 'JEFE']), async (req, re
     }
 
     invalidateDocentesCache();
+    broadcastRealtimeUpdate('periodos', { periodo: periodoDestino, action: 'replicar' });
     res.json({
       success: true,
       count: cedulasSeleccionadas.length,
@@ -413,6 +425,7 @@ router.put('/periodos/:id/reactivar', requireRole(['ADMIN', 'DOCENCIA', 'AUDITOR
     } catch (eDoc) {}
 
     invalidateDocentesCache(true);
+    broadcastRealtimeUpdate('periodos', { periodo: periodoObj.nombre, action: 'reactivar' });
 
     if (auditor && auditor.username) {
       await logAction(
@@ -491,6 +504,8 @@ router.post('/periodos', requireRole(['ADMIN', 'DOCENCIA']), async (req, res) =>
       await logAction(auditor.username, auditor.role, 'Creó Período Académico', `Período: ${nombre}, Estado: ${estado}`);
     }
 
+    if (estado === 'ACTIVO') invalidateDocentesCache(true);
+    broadcastRealtimeUpdate('periodos', { periodo: nombre, action: 'crear' });
     res.json({ success: true, id: result.insertId, nombre, estado });
   } catch (error) {
     console.error('Error al crear período:', error);
@@ -578,6 +593,7 @@ router.put('/periodos/:id', requireRole(['ADMIN', 'DOCENCIA', 'AUDITOR']), async
     }
 
     invalidateDocentesCache();
+    broadcastRealtimeUpdate('periodos', { periodo: periodoObj.nombre, action: 'actualizar' });
     res.json({ success: true, message: `Período ${periodoObj.nombre} actualizado y reprogramación aplicada con éxito.` });
   } catch (error) {
     console.error('Error al actualizar período:', error);
@@ -735,7 +751,7 @@ router.post('/periodos/activar', requireRole(['ADMIN', 'DOCENCIA']), async (req,
           d.cedula
         ]);
 
-        await conn.query('DELETE FROM docentes_materias WHERE docente_cedula = ?', [d.cedula]);
+        await conn.query('DELETE FROM docentes_materias WHERE docente_cedula = ? AND periodoAcademico = ?', [d.cedula, target.nombre]);
 
         if (matsPromover.length > 0) {
           const matValues = matsPromover.map(m => [
@@ -832,6 +848,7 @@ router.post('/periodos/activar', requireRole(['ADMIN', 'DOCENCIA']), async (req,
     }
 
     invalidateDocentesCache(true);
+    broadcastRealtimeUpdate('periodos', { periodo: target.nombre, action: 'activar' });
 
     if (auditor && auditor.username) {
       await logAction(
@@ -910,13 +927,25 @@ router.get('/periodos/:nombre/necesidades', requireStaffAuth, async (req, res) =
       const [mats] = await db.query('SELECT * FROM docentes_materias WHERE periodoAcademico = ?', [nombre]);
       const matsMap = {};
       mats.forEach(m => {
-        if (!matsMap[m.docente_cedula]) matsMap[m.docente_cedula] = [];
-        matsMap[m.docente_cedula].push(m);
+        const rawKey = String(m.docente_cedula || '').trim();
+        const numKey = rawKey.replace(/\D/g, '');
+        if (rawKey) {
+          if (!matsMap[rawKey]) matsMap[rawKey] = [];
+          matsMap[rawKey].push(m);
+        }
+        if (numKey && numKey !== rawKey) {
+          if (!matsMap[numKey]) matsMap[numKey] = [];
+          matsMap[numKey].push(m);
+        }
       });
-      docentesList = docs.map(d => ({
-        ...d,
-        materias: matsMap[d.cedula] || []
-      }));
+      docentesList = docs.map(d => {
+        const dRaw = String(d.cedula || '').trim();
+        const dNum = dRaw.replace(/\D/g, '');
+        return {
+          ...d,
+          materias: matsMap[dRaw] || (dNum ? matsMap[dNum] : null) || []
+        };
+      });
     } else {
       const [cargas] = await db.query(
         'SELECT * FROM cargas_historicas WHERE periodoAcademico = ?',

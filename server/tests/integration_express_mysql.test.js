@@ -195,4 +195,18 @@ describe('Suite de Integración Real: Express + MySQL (3NF, JWT, Bcrypt y Respal
     assert.ok(sqlText.includes('BÓVEDA DE RESPALDO INSTITUCIONAL (3NF)'));
     assert.ok(sqlText.includes('docentes_v3'));
   });
+
+  it('GET /api/docentes?page=1&limit=5 debe retornar paginación estructurada desde MySQL', async () => {
+    const pageRes = await fetch(`${baseUrl}/api/docentes?page=1&limit=5`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(pageRes.status, 200);
+    const body = await pageRes.json();
+    assert.ok(Array.isArray(body.data));
+    assert.ok(body.data.length <= 5);
+    assert.strictEqual(body.page, 1);
+    assert.strictEqual(body.limit, 5);
+    assert.ok(Number.isInteger(body.total) && body.total >= 0);
+    assert.ok(Number.isInteger(body.totalPages) && body.totalPages >= 1);
+  });
 });

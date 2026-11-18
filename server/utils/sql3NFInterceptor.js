@@ -303,16 +303,19 @@ async function handleInterceptedQuery(executor, sql, params = []) {
     }
   }
 
-  // 2. DELETE FROM docentes_materias WHERE docente_cedula ...
+  // 2. DELETE FROM docentes_materias WHERE docente_cedula ... [AND periodoAcademico = ?]
   if (upper.startsWith('DELETE') && upper.includes('FROM DOCENTES_MATERIAS')) {
     if (Array.isArray(params) && params.length > 0) {
-      const cedParam = params[0];
+      const hasPeriodoFilter = /\bPERIODOACADEMICO\s*=\s*\?/i.test(s);
+      const periodoNombre = hasPeriodoFilter ? params[params.length - 1] : null;
+      const cedParams = hasPeriodoFilter ? params.slice(0, -1) : params;
+      const cedParam = cedParams[0];
       if (Array.isArray(cedParam)) {
         for (const c of cedParam) {
-          await adapter.deleteMateriasByCedula3NF(executor, c);
+          await adapter.deleteMateriasByCedula3NF(executor, c, periodoNombre);
         }
-      } else {
-        await adapter.deleteMateriasByCedula3NF(executor, cedParam);
+      } else if (cedParam !== undefined) {
+        await adapter.deleteMateriasByCedula3NF(executor, cedParam, periodoNombre);
       }
       return [{ affectedRows: 1, warningStatus: 0 }, undefined];
     }
@@ -326,7 +329,7 @@ async function handleInterceptedQuery(executor, sql, params = []) {
       const rows = Array.isArray(params[0]) ? params[0] : [params];
       for (const row of rows) {
         if (Array.isArray(row)) {
-          let cedula, nombre, horasSemanal, horasLapso, especialidadDestino, seccion, cupos, inscritos, cohorte;
+          let cedula, nombre, horasSemanal, horasLapso, especialidadDestino, seccion, cupos, inscritos, cohorte, periodoAcademico;
           if (colNames.length > 0) {
             const getVal = (name) => {
               const idx = colNames.indexOf(name.toLowerCase());
@@ -344,34 +347,40 @@ async function handleInterceptedQuery(executor, sql, params = []) {
             if (cohorte === undefined && row.length > 8 && colNames.includes('cohorte')) {
               cohorte = row[8];
             }
+            periodoAcademico = getVal('periodoacademico');
+            if (periodoAcademico === undefined && row.length > 9 && colNames.includes('periodoacademico')) {
+              periodoAcademico = row[9];
+            }
           } else {
             [cedula, nombre, horasSemanal, horasLapso, especialidadDestino, seccion, cupos, inscritos] = row;
             if (row.length > 8) cohorte = row[8];
+            if (row.length > 9) periodoAcademico = row[9];
           }
 
           if (cedula && nombre) {
             const normCed = adapter.normalizeCedula(cedula);
             const docenteId = await adapter.resolveDocenteId(executor, normCed);
             if (docenteId) {
-              let [cRows] = await executor.query(
-                'SELECT id FROM docentes_contrataciones_v3 WHERE docente_id = ? ORDER BY id DESC LIMIT 1',
-                [docenteId]
-              );
-              if (!cRows || cRows.length === 0) {
-                const [pAct] = await executor.query("SELECT id FROM periodos_academicos_v3 WHERE estado = 'ACTIVO' LIMIT 1").catch(() => [[]]);
-                const pId = pAct && pAct.length > 0 ? pAct[0].id : 2;
+              const targetPeriodoId = await adapter.resolvePeriodoId(executor, periodoAcademico || null);
+              let contratacionId = null;
+              if (targetPeriodoId) {
+                const [pContRows] = await executor.query(
+                  'SELECT id FROM docentes_contrataciones_v3 WHERE docente_id = ? AND periodo_id = ? ORDER BY id DESC LIMIT 1',
+                  [docenteId, targetPeriodoId]
+                );
+                if (pContRows && pContRows.length > 0) {
+                  contratacionId = pContRows[0].id;
+                }
+              }
+              if (!contratacionId) {
+                const pId = targetPeriodoId || 2;
                 await executor.query(
                   'INSERT INTO docentes_contrataciones_v3 (docente_id, periodo_id, departamento_id, sede_id, status) VALUES (?, ?, 1, 1, ?)',
                   [docenteId, pId, 'Activo']
                 ).catch(() => {});
-                const [newCRows] = await executor.query(
-                  'SELECT id FROM docentes_contrataciones_v3 WHERE docente_id = ? ORDER BY id DESC LIMIT 1',
-                  [docenteId]
-                );
-                cRows = newCRows || [];
+                contratacionId = await adapter.resolveContratacionId(executor, docenteId, targetPeriodoId);
               }
-              if (cRows.length > 0) {
-                const contratacionId = cRows[0].id;
+              if (contratacionId) {
                 await executor.nativeQuery('INSERT IGNORE INTO materias_catalogo_v3 (nombre) VALUES (?)', [nombre.trim()]);
                 const [mRows] = await executor.nativeQuery('SELECT id FROM materias_catalogo_v3 WHERE nombre = ? LIMIT 1', [nombre.trim()]);
                 if (mRows.length > 0) {

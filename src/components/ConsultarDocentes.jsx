@@ -16,6 +16,7 @@ import { matchesSearch } from '../utils/searchHelper';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
 import { buildAuditorExportData, buildOfertaExportData } from '../utils/staffExcelExportHelper';
 import { useStaffValidation } from '../hooks/useStaffValidation';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
 // Subcomponentes modulares reutilizables de Staff
@@ -100,6 +101,11 @@ const ConsultarDocentes = () => {
     });
     setSedesList(['Todos', ...Array.from(sedes).sort()]);
   };
+
+  useRealtimeSync(() => {
+    invalidateStaffCache();
+    fetchStaff(filterPeriodo);
+  });
 
   useEffect(() => {
     fetchStaff(filterPeriodo);

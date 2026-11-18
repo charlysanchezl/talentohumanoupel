@@ -134,6 +134,36 @@ async function resolveOrCreateBancoId(executor, bancoNombre, cuentaBancaria) {
   }
 }
 
+async function resolvePeriodoId(executor, periodoNombre) {
+  if (periodoNombre) {
+    const [rows] = await executor.query(
+      'SELECT id FROM periodos_academicos_v3 WHERE nombre = ? LIMIT 1',
+      [String(periodoNombre).trim()]
+    ).catch(() => [[]]);
+    if (rows && rows.length > 0) return rows[0].id;
+  }
+  const [actRows] = await executor.query(
+    "SELECT id FROM periodos_academicos_v3 WHERE estado = 'ACTIVO' LIMIT 1"
+  ).catch(() => [[]]);
+  return (actRows && actRows.length > 0) ? actRows[0].id : null;
+}
+
+async function resolveContratacionId(executor, docenteId, periodoId) {
+  if (!docenteId) return null;
+  if (periodoId) {
+    const [pRows] = await executor.query(
+      'SELECT id FROM docentes_contrataciones_v3 WHERE docente_id = ? AND periodo_id = ? ORDER BY id DESC LIMIT 1',
+      [docenteId, periodoId]
+    );
+    if (pRows && pRows.length > 0) return pRows[0].id;
+  }
+  const [fallbackRows] = await executor.query(
+    'SELECT id FROM docentes_contrataciones_v3 WHERE docente_id = ? ORDER BY id DESC LIMIT 1',
+    [docenteId]
+  );
+  return (fallbackRows && fallbackRows.length > 0) ? fallbackRows[0].id : null;
+}
+
 async function getReferenceData(executor) {
   const [depts] = await executor.query('SELECT id, nombre, codigo FROM departamentos_v3 WHERE activo = 1');
   const [sedes] = await executor.query('SELECT id, nombre FROM sedes_v3 WHERE activo = 1');
@@ -371,6 +401,7 @@ async function updateDocenteFields3NF(executor, cedulaRaw, fieldsObj) {
   if (fieldsObj.department !== undefined) { cUpdates.push('departamento_id = ?'); cParams.push(resolveDepartmentId(fieldsObj.department, depts)); }
   if (fieldsObj.sedeCentro !== undefined) { cUpdates.push('sede_id = ?'); cParams.push(resolveSedeId(fieldsObj.sedeCentro, sedes)); }
 
+  let targetPeriodoId = null;
   if (fieldsObj.periodoAcademico !== undefined && fieldsObj.periodoAcademico) {
     let pFound = periodos.find(p => p.nombre === fieldsObj.periodoAcademico);
     if (!pFound) {
@@ -379,19 +410,31 @@ async function updateDocenteFields3NF(executor, cedulaRaw, fieldsObj) {
       if (newP && newP.length > 0) pFound = newP[0];
     }
     if (pFound) {
+      targetPeriodoId = pFound.id;
       cUpdates.push('periodo_id = ?');
       cParams.push(pFound.id);
     }
+  } else {
+    targetPeriodoId = await resolvePeriodoId(executor, null);
   }
 
   if (cUpdates.length > 0 && docenteId) {
-    cParams.push(docenteId);
-    await executor.query(`
-      UPDATE docentes_contrataciones_v3 
-      SET ${cUpdates.join(', ')} 
-      WHERE docente_id = ? 
-      ORDER BY id DESC LIMIT 1
-    `, cParams);
+    const targetContId = await resolveContratacionId(executor, docenteId, targetPeriodoId);
+    if (targetContId) {
+      cParams.push(targetContId);
+      await executor.query(
+        `UPDATE docentes_contrataciones_v3 SET ${cUpdates.join(', ')} WHERE id = ?`,
+        cParams
+      );
+    } else {
+      cParams.push(docenteId);
+      await executor.query(`
+        UPDATE docentes_contrataciones_v3 
+        SET ${cUpdates.join(', ')} 
+        WHERE docente_id = ? 
+        ORDER BY id DESC LIMIT 1
+      `, cParams);
+    }
   }
 }
 
@@ -407,16 +450,13 @@ async function deleteDocente3NF(executor, cedulaRaw) {
 /**
  * 4. GESTIÓN DE MATERIAS EN 3NF PURO (cargas_academicas_v3)
  */
-async function replaceMaterias3NF(executor, cedulaRaw, materiasList) {
+async function replaceMaterias3NF(executor, cedulaRaw, materiasList, periodoNombre = null) {
   const docenteId = await resolveDocenteId(executor, cedulaRaw);
   if (!docenteId) return;
 
-  const [cRows] = await executor.query(
-    'SELECT id FROM docentes_contrataciones_v3 WHERE docente_id = ? ORDER BY id DESC LIMIT 1',
-    [docenteId]
-  );
-  if (cRows.length === 0) return;
-  const contratacionId = cRows[0].id;
+  const targetPeriodoId = await resolvePeriodoId(executor, periodoNombre);
+  const contratacionId = await resolveContratacionId(executor, docenteId, targetPeriodoId);
+  if (!contratacionId) return;
 
   await executor.query('DELETE FROM cargas_academicas_v3 WHERE contratacion_id = ?', [contratacionId]);
 
@@ -449,9 +489,22 @@ async function replaceMaterias3NF(executor, cedulaRaw, materiasList) {
   }
 }
 
-async function deleteMateriasByCedula3NF(executor, cedulaRaw) {
+async function deleteMateriasByCedula3NF(executor, cedulaRaw, periodoNombre = null) {
   const docenteId = await resolveDocenteId(executor, cedulaRaw);
   if (!docenteId) return;
+
+  if (periodoNombre !== '*') {
+    const targetPeriodoId = await resolvePeriodoId(executor, periodoNombre);
+    if (targetPeriodoId) {
+      await executor.query(`
+        DELETE ca FROM cargas_academicas_v3 ca
+        JOIN docentes_contrataciones_v3 c ON ca.contratacion_id = c.id
+        WHERE c.docente_id = ? AND c.periodo_id = ?
+      `, [docenteId, targetPeriodoId]);
+      return;
+    }
+  }
+
   await executor.query(`
     DELETE ca FROM cargas_academicas_v3 ca
     JOIN docentes_contrataciones_v3 c ON ca.contratacion_id = c.id
@@ -459,15 +512,12 @@ async function deleteMateriasByCedula3NF(executor, cedulaRaw) {
   `, [docenteId]);
 }
 
-async function updateMateriaSingle3NF(executor, cedulaRaw, nombreMateria, fields) {
+async function updateMateriaSingle3NF(executor, cedulaRaw, nombreMateria, fields, periodoNombre = null) {
   const docenteId = await resolveDocenteId(executor, cedulaRaw);
   if (!docenteId) return;
-  const [cRows] = await executor.query(
-    'SELECT id FROM docentes_contrataciones_v3 WHERE docente_id = ? ORDER BY id DESC LIMIT 1',
-    [docenteId]
-  );
-  if (cRows.length === 0) return;
-  const contratacionId = cRows[0].id;
+  const targetPeriodoId = await resolvePeriodoId(executor, periodoNombre);
+  const contratacionId = await resolveContratacionId(executor, docenteId, targetPeriodoId);
+  if (!contratacionId) return;
 
   const [mRows] = await executor.query('SELECT id FROM materias_catalogo_v3 WHERE nombre = ? LIMIT 1', [nombreMateria.trim()]);
   if (mRows.length === 0) return;
@@ -561,6 +611,8 @@ module.exports = {
   resolveDocenteId,
   resolveOrCreateEspecialidadId,
   resolveOrCreateBancoId,
+  resolvePeriodoId,
+  resolveContratacionId,
   upsertDocente3NF,
   updateDocenteFields3NF,
   deleteDocente3NF,

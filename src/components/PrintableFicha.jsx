@@ -369,7 +369,7 @@ const PrintableFicha = ({ staff, onBack }) => {
             <thead>
               <tr style={{ backgroundColor: '#f0f0f0' }}>
                 <th colSpan="5" style={{ border: '1px solid black', padding: '2px 4px', textAlign: 'left', fontWeight: 'bold' }}>
-                  DATOS OFERTA ACADÉMICA <span style={{ fontWeight: 'normal', fontStyle: 'italic', fontSize: '8pt', marginLeft: '8px' }}>Datos para ser llenados por el Jefe de Dpto.</span>
+                  DATOS OFERTA ACADÉMICA ({displayPeriodo}) <span style={{ fontWeight: 'normal', fontStyle: 'italic', fontSize: '8pt', marginLeft: '8px' }}>Datos para ser llenados por el Jefe de Dpto.</span>
                 </th>
               </tr>
               <tr style={{ backgroundColor: '#f9f9f9' }}>
@@ -381,6 +381,13 @@ const PrintableFicha = ({ staff, onBack }) => {
               </tr>
             </thead>
             <tbody>
+              {(!staff.materias || staff.materias.length === 0) && (
+                <tr>
+                  <td colSpan="5" style={{ border: '1px solid black', padding: '6px 8px', textAlign: 'center', fontStyle: 'italic', color: '#475569', backgroundColor: '#f8fafc' }}>
+                    Sin carga académica asignada / validada para el período {displayPeriodo}.
+                  </td>
+                </tr>
+              )}
               {staff.materias && staff.materias.map((mat, i) => {
                 const sec = mat.seccion || mat.secciones || 'U';
                 const cup = (mat.cupos !== undefined && mat.cupos !== null && mat.cupos !== '') ? mat.cupos : 0;

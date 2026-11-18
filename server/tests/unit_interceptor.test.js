@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { isTargetQuery } = require('../utils/sql3NFInterceptor');
+const { isTargetQuery, handleInterceptedQuery } = require('../utils/sql3NFInterceptor');
 const adapter = require('../utils/docente3NFAdapter');
 
 describe('Suite de Pruebas Unitarias: Interceptor y Adaptador 3NF', () => {
@@ -109,6 +109,66 @@ describe('Suite de Pruebas Unitarias: Interceptor y Adaptador 3NF', () => {
     it('debe retornar sede por defecto (ID 1) para entradas vacías', () => {
       assert.strictEqual(adapter.resolveSedeId('', mockSedes), 1);
       assert.strictEqual(adapter.resolveSedeId(null, mockSedes), 1);
+    });
+  });
+
+  describe('Aislamiento estricto por periodo_id en Adaptador e Interceptor 3NF', () => {
+    it('resolvePeriodoId() y resolveContratacionId() deben filtrar por periodo específico', async () => {
+      const queries = [];
+      const mockExecutor = {
+        query: async (sql, params) => {
+          queries.push({ sql, params });
+          if (sql.includes('periodos_academicos_v3')) return [[{ id: 2 }]];
+          if (sql.includes('docentes_contrataciones_v3')) return [[{ id: 77 }]];
+          return [[]];
+        }
+      };
+
+      const pId = await adapter.resolvePeriodoId(mockExecutor, '2026-II');
+      assert.strictEqual(pId, 2);
+      const cId = await adapter.resolveContratacionId(mockExecutor, 10, pId);
+      assert.strictEqual(cId, 77);
+      assert.ok(queries.some(q => q.sql.includes('docente_id = ? AND periodo_id = ?') && q.params[1] === 2));
+    });
+
+    it('deleteMateriasByCedula3NF() debe restringir el DELETE al periodo_id indicado', async () => {
+      const queries = [];
+      const mockExecutor = {
+        query: async (sql, params) => {
+          queries.push({ sql, params });
+          if (sql.includes('SELECT id FROM docentes_v3')) return [[{ id: 10 }]];
+          if (sql.includes('SELECT id FROM periodos_academicos_v3')) return [[{ id: 2 }]];
+          return [{ affectedRows: 1 }];
+        }
+      };
+
+      await adapter.deleteMateriasByCedula3NF(mockExecutor, 'V-18959604', '2026-II');
+      const deleteQuery = queries.find(q => q.sql.includes('DELETE ca FROM cargas_academicas_v3'));
+      assert.ok(deleteQuery, 'Debe ejecutar DELETE en cargas_academicas_v3');
+      assert.ok(deleteQuery.sql.includes('c.periodo_id = ?'), 'Debe filtrar por c.periodo_id = ?');
+      assert.deepStrictEqual(deleteQuery.params, [10, 2]);
+    });
+
+    it('handleInterceptedQuery() debe respetar AND periodoAcademico = ? en DELETE FROM docentes_materias', async () => {
+      const queries = [];
+      const mockExecutor = {
+        query: async (sql, params) => {
+          queries.push({ sql, params });
+          if (sql.includes('SELECT id FROM docentes_v3')) return [[{ id: 10 }]];
+          if (sql.includes('SELECT id FROM periodos_academicos_v3')) return [[{ id: 2 }]];
+          return [{ affectedRows: 1 }];
+        }
+      };
+
+      await handleInterceptedQuery(
+        mockExecutor,
+        'DELETE FROM docentes_materias WHERE (docente_cedula = ? OR docente_cedula = ?) AND periodoAcademico = ?',
+        ['V-18959604', '18959604', '2026-II']
+      );
+
+      const deleteQuery = queries.find(q => q.sql.includes('DELETE ca FROM cargas_academicas_v3'));
+      assert.ok(deleteQuery, 'Debe ejecutar DELETE en cargas_academicas_v3');
+      assert.deepStrictEqual(deleteQuery.params, [10, 2]);
     });
   });
 

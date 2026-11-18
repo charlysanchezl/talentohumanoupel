@@ -51,6 +51,16 @@ function canAccessDocenteRecord(user, targetCedula) {
   return false;
 }
 
+function normalizeMateriaRow(m) {
+  return {
+    ...m,
+    seccion: m.seccion || m.secciones || '',
+    cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
+    inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
+    cohorte: (m.cohorte !== undefined && m.cohorte !== null && m.cohorte !== '') ? String(m.cohorte).trim() : ''
+  };
+}
+
 // Función centralizada para consultar la BD con coalescing de promesas concurrentes
 async function fetchDocentesListInternal(periodo) {
   let activePeriodObj = null;
@@ -61,27 +71,23 @@ async function fetchDocentesListInternal(periodo) {
       activePeriodObj = actRows[0];
       activePeriodName = actRows[0].nombre;
     } else {
-      const [latestRows] = await db.query("SELECT * FROM periodos_academicos ORDER BY id DESC LIMIT 1");
-      if (latestRows.length > 0) {
-        activePeriodObj = latestRows[0];
-        activePeriodName = latestRows[0].nombre;
+      const [planRows] = await db.query("SELECT * FROM periodos_academicos WHERE estado = 'PLANIFICACION' ORDER BY id DESC LIMIT 1");
+      if (planRows.length > 0) {
+        activePeriodObj = planRows[0];
+        activePeriodName = planRows[0].nombre;
       }
     }
   } catch (e) {}
 
   if (!periodo || periodo === 'Todos' || (activePeriodName && periodo === activePeriodName)) {
     const [docentes] = await db.query('SELECT * FROM docentes');
-    const [materias] = await db.query('SELECT * FROM docentes_materias');
+    const [materias] = activePeriodName
+      ? await db.query('SELECT * FROM docentes_materias WHERE periodoAcademico = ?', [activePeriodName])
+      : [[]];
     
     const materiasPorDocente = {};
     for (const m of materias) {
-      const normalizedMateria = {
-        ...m,
-        seccion: m.seccion || m.secciones || '',
-        cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
-        inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
-        cohorte: (m.cohorte !== undefined && m.cohorte !== null && m.cohorte !== '') ? String(m.cohorte).trim() : ''
-      };
+      const normalizedMateria = normalizeMateriaRow(m);
       const rawKey = String(m.docente_cedula || '').trim();
       const numKey = rawKey.replace(/\D/g, '');
       if (rawKey) {
@@ -107,13 +113,7 @@ async function fetchDocentesListInternal(periodo) {
         try {
           mats = typeof c.materias === 'string' ? JSON.parse(c.materias) : (c.materias || []);
         } catch (e) { mats = []; }
-        const normMats = (mats || []).map(m => ({
-          ...m,
-          seccion: m.seccion || m.secciones || '',
-          cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
-          inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
-          cohorte: (m.cohorte !== undefined && m.cohorte !== null && m.cohorte !== '') ? String(m.cohorte).trim() : ''
-        }));
+        const normMats = (mats || []).map(normalizeMateriaRow);
         const entry = {
           materias: normMats,
           status: c.status || '',
@@ -168,9 +168,10 @@ async function fetchDocentesListInternal(periodo) {
 
       const resolvedEsp = resolveDisplayEspecialidad(doc.especialidad, docMats, usedHistoricFallback);
 
+      const isDifferentContractPeriod = Boolean(activePeriodName && doc.periodoAcademico && doc.periodoAcademico !== activePeriodName);
       const effectiveBaseStatus = usedHistoricFallback
         ? (fbEntry?.status || (docMats.length > 0 ? 'Validado' : 'Sin Carga'))
-        : doc.status;
+        : (isDifferentContractPeriod && docMats.length === 0 ? 'Por Revisar' : doc.status);
       const hasRealLoad = docMats.length > 0 && totSem > 0;
       const finalStatus = (!hasRealLoad && (effectiveBaseStatus === 'Validado' || effectiveBaseStatus === 'Activo'))
         ? 'Por Revisar'
@@ -214,15 +215,7 @@ async function fetchDocentesListInternal(periodo) {
     } catch (e) {
       mats = [];
     }
-    const normMats = mats.map(m => {
-      return {
-        ...m,
-        seccion: m.seccion || m.secciones || '',
-        cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
-        inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
-        cohorte: (m.cohorte !== undefined && m.cohorte !== null && m.cohorte !== '') ? String(m.cohorte).trim() : ''
-      };
-    });
+    const normMats = mats.map(normalizeMateriaRow);
     const rawKey = String(c.cedula_docente || '').trim();
     const numKey = rawKey.replace(/\D/g, '');
     const cargaItem = { ...c, materias: normMats };
@@ -325,6 +318,91 @@ async function fetchDocentesListInternal(periodo) {
   return [];
 }
 
+async function fetchDocentesPaginatedSQL({ periodo, pageNum, limitNum, department, sede, search }) {
+  let activePeriodObj = null;
+  let activePeriodName = null;
+  try {
+    const [actRows] = await db.query("SELECT * FROM periodos_academicos WHERE estado = 'ACTIVO' LIMIT 1");
+    if (actRows.length > 0) {
+      activePeriodObj = actRows[0];
+      activePeriodName = actRows[0].nombre;
+    }
+  } catch (_) {}
+
+  const targetPeriodo = (periodo && periodo !== 'Todos') ? periodo : activePeriodName;
+  const whereClauses = [];
+  const whereParams = [];
+
+  if (department && department !== 'Todos') {
+    whereClauses.push('LOWER(department) = ?');
+    whereParams.push(String(department).trim().toLowerCase());
+  }
+  if (sede && sede !== 'Todas') {
+    whereClauses.push('LOWER(sedeCentro) = ?');
+    whereParams.push(String(sede).trim().toLowerCase());
+  }
+  if (search && String(search).trim() !== '') {
+    const likeTerm = `%${String(search).trim().toLowerCase()}%`;
+    whereClauses.push('(LOWER(cedula) LIKE ? OR LOWER(nombres) LIKE ? OR LOWER(apellidos) LIKE ? OR LOWER(especialidad) LIKE ?)');
+    whereParams.push(likeTerm, likeTerm, likeTerm, likeTerm);
+  }
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+  const offset = (pageNum - 1) * limitNum;
+
+  const [[countRow]] = await db.query(`SELECT COUNT(*) AS total FROM docentes ${whereSql}`, whereParams);
+  const total = Number(countRow?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / limitNum));
+
+  const [docRows] = await db.query(
+    `SELECT * FROM docentes ${whereSql} ORDER BY id ASC LIMIT ? OFFSET ?`,
+    [...whereParams, limitNum, offset]
+  );
+
+  const cedulas = docRows.map(d => d.cedula).filter(Boolean);
+  const matsByCedula = {};
+  if (cedulas.length > 0 && targetPeriodo) {
+    const [matRows] = await db.query(
+      'SELECT * FROM docentes_materias WHERE periodoAcademico = ? AND docente_cedula IN (?)',
+      [targetPeriodo, cedulas]
+    );
+    for (const m of matRows) {
+      const norm = normalizeMateriaRow(m);
+      const rawKey = String(m.docente_cedula || '').trim();
+      if (rawKey) {
+        if (!matsByCedula[rawKey]) matsByCedula[rawKey] = [];
+        matsByCedula[rawKey].push(norm);
+      }
+    }
+  }
+
+  const data = docRows.map(doc => {
+    const docMats = matsByCedula[doc.cedula] || [];
+    const totSem = docMats.reduce((sum, m) => sum + (parseInt(m.horasSemanal) || 0), 0);
+    const totLap = docMats.reduce((sum, m) => sum + (parseInt(m.horasLapso) || 0), 0);
+    const hasRealLoad = docMats.length > 0 && totSem > 0;
+    const isDiffPeriod = Boolean(targetPeriodo && doc.periodoAcademico && doc.periodoAcademico !== targetPeriodo);
+    const baseStatus = (isDiffPeriod && docMats.length === 0) ? 'Por Revisar' : doc.status;
+    const finalStatus = (!hasRealLoad && (baseStatus === 'Validado' || baseStatus === 'Activo')) ? 'Por Revisar' : (baseStatus || 'Por Revisar');
+
+    return stripSensitiveDocenteFields({
+      ...doc,
+      department: normalizeDepartmentName(doc.department),
+      status: finalStatus,
+      especialidad: resolveDisplayEspecialidad(doc.especialidad, docMats, false),
+      periodoAcademico: targetPeriodo || doc.periodoAcademico || '',
+      semanas: activePeriodObj?.semanas || doc.semanas || 15,
+      fechaDesde: activePeriodObj?.fechaDesde || doc.fechaDesde || '',
+      fechaHasta: activePeriodObj?.fechaHasta || doc.fechaHasta || '',
+      materias: docMats,
+      totalHorasSemanal: totSem,
+      totalHorasLapso: totLap
+    });
+  });
+
+  return { data, total, page: pageNum, limit: limitNum, totalPages };
+}
+
 // 1. GET /docentes (Solo personal institucional autenticado)
 router.get('/docentes', requireStaffAuth, async (req, res) => {
   try {
@@ -333,8 +411,25 @@ router.get('/docentes', requireStaffAuth, async (req, res) => {
     res.setHeader('Expires', '0');
     const { periodo, page, limit, search, department, sede } = req.query;
 
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const isPaginatedRequest = !isNaN(pageNum) && pageNum > 0 && !isNaN(limitNum) && limitNum > 0;
+
     const cacheKey = String(periodo || 'ACTUAL').trim();
     let fullList = getDocentesCache(cacheKey);
+
+    if (isPaginatedRequest && !fullList && (!periodo || periodo === 'Todos')) {
+      res.setHeader('X-Cache', 'SQL-PAGINATED');
+      const paginatedResult = await fetchDocentesPaginatedSQL({
+        periodo,
+        pageNum,
+        limitNum,
+        department,
+        sede,
+        search
+      });
+      return res.json(paginatedResult);
+    }
 
     if (fullList) {
       res.setHeader('X-Cache', 'HIT');
@@ -356,9 +451,7 @@ router.get('/docentes', requireStaffAuth, async (req, res) => {
       fullList = await pendingDocentesFetches.get(cacheKey);
     }
 
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    if (!isNaN(pageNum) && pageNum > 0 && !isNaN(limitNum) && limitNum > 0) {
+    if (isPaginatedRequest) {
       let filtered = fullList;
       if (department && department !== 'Todos') {
         const deptNorm = String(department).trim().toLowerCase();
@@ -1069,17 +1162,29 @@ router.put('/docentes/carga', requireRole(['ADMIN', 'DOCENCIA', 'JEFE']), async 
 
       await conn.query(updateQuery, updateParams);
 
-      const [existingMats] = await conn.query('SELECT * FROM docentes_materias WHERE docente_cedula = ? OR docente_cedula = ?', [canonicalCedula, bareCedula]);
+      const [existingMats] = await conn.query('SELECT * FROM docentes_materias WHERE (docente_cedula = ? OR docente_cedula = ?) AND periodoAcademico = ?', [canonicalCedula, bareCedula, per]);
       const existingMatMap = new Map();
       for (const em of existingMats) {
         if (em.nombre) existingMatMap.set(em.nombre.toUpperCase().trim(), em);
       }
 
-      await conn.query('DELETE FROM docentes_materias WHERE docente_cedula = ? OR docente_cedula = ?', [canonicalCedula, bareCedula]);
+      await conn.query('DELETE FROM docentes_materias WHERE (docente_cedula = ? OR docente_cedula = ?) AND periodoAcademico = ?', [canonicalCedula, bareCedula, per]);
       
       if (materias && materias.length > 0) {
+        const seenMateriaKeys = new Set();
         const materiasValues = materias
           .filter(m => m && m.nombre && m.nombre.trim() !== '')
+          .filter(m => {
+            const key = [
+              m.nombre.trim().toUpperCase(),
+              String(m.seccion || '').trim().toUpperCase(),
+              String(m.especialidadDestino || '').trim().toUpperCase(),
+              String(m.cohorte || '').trim().toUpperCase()
+            ].join('|');
+            if (seenMateriaKeys.has(key)) return false;
+            seenMateriaKeys.add(key);
+            return true;
+          })
           .map(m => {
             const mNombre = m.nombre.trim().toUpperCase();
             const existing = existingMatMap.get(mNombre);

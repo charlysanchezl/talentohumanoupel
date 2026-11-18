@@ -171,46 +171,55 @@ if (typeof window !== 'undefined') {
   }).catch(() => {});
 }
 
-export const getCachedStaff = () => {
-  if (_inMemoryStaff && Array.isArray(_inMemoryStaff)) {
+const getStaffCacheKey = (periodo = 'Todos') => {
+  const clean = String(periodo || 'Todos').trim();
+  return (!clean || clean === 'Todos') ? CACHE_STAFF_KEY : `${CACHE_STAFF_KEY}_${clean}`;
+};
+
+export const getCachedStaff = (periodo = 'Todos') => {
+  const key = getStaffCacheKey(periodo);
+  if (key === CACHE_STAFF_KEY && _inMemoryStaff && Array.isArray(_inMemoryStaff)) {
     return _inMemoryStaff;
   }
   try {
-    const raw = localStorage.getItem(CACHE_STAFF_KEY);
+    const raw = localStorage.getItem(key);
     if (raw) {
-      _inMemoryStaff = JSON.parse(raw);
-      return _inMemoryStaff;
+      const parsed = JSON.parse(raw);
+      if (key === CACHE_STAFF_KEY) _inMemoryStaff = parsed;
+      return parsed;
     }
   } catch (e) {}
   return null;
 };
 
-export const getCachedStaffAsync = async () => {
-  if (_inMemoryStaff && Array.isArray(_inMemoryStaff) && _inMemoryStaff.length > 0) {
+export const getCachedStaffAsync = async (periodo = 'Todos') => {
+  const key = getStaffCacheKey(periodo);
+  if (key === CACHE_STAFF_KEY && _inMemoryStaff && Array.isArray(_inMemoryStaff) && _inMemoryStaff.length > 0) {
     return _inMemoryStaff;
   }
   try {
-    const fromIdb = await idbGet(CACHE_STAFF_KEY);
+    const fromIdb = await idbGet(key);
     if (fromIdb && Array.isArray(fromIdb) && fromIdb.length > 0) {
-      _inMemoryStaff = fromIdb;
+      if (key === CACHE_STAFF_KEY) _inMemoryStaff = fromIdb;
       return fromIdb;
     }
   } catch (e) {}
-  return getCachedStaff();
+  return getCachedStaff(periodo);
 };
 
-export const setCachedStaff = (staffArray) => {
+export const setCachedStaff = (staffArray, periodo = 'Todos') => {
   if (!Array.isArray(staffArray)) return;
-  _inMemoryStaff = staffArray;
+  const key = getStaffCacheKey(periodo);
+  if (key === CACHE_STAFF_KEY) _inMemoryStaff = staffArray;
 
-  // 1. Guardar de forma robusta e ilimitada en IndexedDB
-  idbSet(CACHE_STAFF_KEY, staffArray).catch(e => {
+  // 1. Guardar de forma robusta e ilimitada en IndexedDB (aislado por período)
+  idbSet(key, staffArray).catch(e => {
     console.warn('Advertencia guardando en IndexedDB:', e);
   });
 
   // 2. Intentar guardar en localStorage como respaldo secundario (capturando exceso de cuota de 5MB)
   try {
-    localStorage.setItem(CACHE_STAFF_KEY, JSON.stringify(staffArray));
+    localStorage.setItem(key, JSON.stringify(staffArray));
   } catch (e) {
     // Si excede los 5 MB de localStorage, IndexedDB resguarda los datos completos
   }
