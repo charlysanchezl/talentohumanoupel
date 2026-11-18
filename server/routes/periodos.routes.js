@@ -476,7 +476,10 @@ router.post('/periodos', requireRole(['ADMIN', 'DOCENCIA']), async (req, res) =>
     }
 
     if (estado === 'ACTIVO') {
-      await db.query("UPDATE periodos_academicos SET estado = 'CERRADO', fechaCierre = CURRENT_TIMESTAMP WHERE estado = 'ACTIVO'");
+      const [prevActives] = await db.query("SELECT * FROM periodos_academicos WHERE estado = 'ACTIVO'");
+      for (const prev of prevActives) {
+        await cerrarPeriodoSeguro(prev, auditor, `Cierre automático al crear nuevo período activo ${nombre}`);
+      }
     }
 
     const [result] = await db.query(`
@@ -696,19 +699,7 @@ router.post('/periodos/activar', requireRole(['ADMIN', 'DOCENCIA']), async (req,
 
       await conn.query("UPDATE periodos_academicos SET estado = 'ACTIVO', fechaActivacion = CURRENT_TIMESTAMP WHERE id = ?", [target.id]);
 
-      // 1. Obtener la carga base del semestre anterior para herencia natural
-      const sourcePeriodName = prevActive ? prevActive.nombre : '2026-I';
-      const [prevCargas] = await conn.query('SELECT * FROM cargas_historicas WHERE periodoAcademico = ?', [sourcePeriodName]);
-      const baseSemestreAnteriorMap = {};
-      for (const pc of prevCargas) {
-        let pMats = [];
-        try { pMats = typeof pc.materias === 'string' ? JSON.parse(pc.materias) : (pc.materias || []); } catch(e) {}
-        if (pMats.length > 0) {
-          baseSemestreAnteriorMap[pc.cedula_docente] = pMats;
-        }
-      }
-
-      // 2. Mapear posibles cargas planificadas explícitas del período destino
+      // 1. Mapear posibles cargas planificadas explícitas del período destino
       const [cargasPlanificadas] = await conn.query('SELECT * FROM cargas_historicas WHERE periodoAcademico = ?', [target.nombre]);
       cargasPlanificadasCount = cargasPlanificadas.length;
       const planificadasMap = {};
@@ -724,13 +715,13 @@ router.post('/periodos/activar', requireRole(['ADMIN', 'DOCENCIA']), async (req,
         }
       }
 
-      // 3. Promover cada docente: Si tiene planificación previa la usa, sino hereda del semestre anterior en 'Por Revisar'
+      // 2. Promover cada docente: solo usa su carga planificada para este período; nunca hereda automáticamente carga de un semestre cerrado
       const [allDocentes] = await conn.query('SELECT cedula, department FROM docentes');
       for (const d of allDocentes) {
         const cargaPlan = planificadasMap[d.cedula];
         const matsPromover = (cargaPlan && cargaPlan.materias && cargaPlan.materias.length > 0)
           ? cargaPlan.materias
-          : (baseSemestreAnteriorMap[d.cedula] || []);
+          : [];
 
         await conn.query(`
           UPDATE docentes 
@@ -876,7 +867,7 @@ router.get('/periodos/:nombre/huerfanas', requireStaffAuth, async (req, res) => 
     
     const assignedNames = new Set();
     if (isActivo) {
-      const [docMats] = await db.query('SELECT DISTINCT UPPER(TRIM(nombre)) as matName FROM docentes_materias');
+      const [docMats] = await db.query('SELECT DISTINCT UPPER(TRIM(nombre)) as matName FROM docentes_materias WHERE periodoAcademico = ?', [nombre]);
       docMats.forEach(r => assignedNames.add(r.matName));
     } else {
       const [cargas] = await db.query('SELECT materias FROM cargas_historicas WHERE periodoAcademico = ?', [nombre]);
@@ -916,7 +907,7 @@ router.get('/periodos/:nombre/necesidades', requireStaffAuth, async (req, res) =
     let docentesList = [];
     if (isActivo) {
       const [docs] = await db.query('SELECT * FROM docentes');
-      const [mats] = await db.query('SELECT * FROM docentes_materias');
+      const [mats] = await db.query('SELECT * FROM docentes_materias WHERE periodoAcademico = ?', [nombre]);
       const matsMap = {};
       mats.forEach(m => {
         if (!matsMap[m.docente_cedula]) matsMap[m.docente_cedula] = [];

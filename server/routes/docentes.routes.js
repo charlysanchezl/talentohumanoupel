@@ -138,25 +138,19 @@ async function fetchDocentesListInternal(periodo) {
       let usedHistoricFallback = false;
 
       if (activePeriodName) {
-        const matchingActiveMats = rawDocMats.filter(m => !m.periodoAcademico || m.periodoAcademico === activePeriodName);
-        const hasOtherPeriodLiveMats = rawDocMats.some(m => m.periodoAcademico && m.periodoAcademico !== activePeriodName);
+        const matchingActiveMats = rawDocMats.filter(m => m.periodoAcademico === activePeriodName);
+        const hasOtherPeriodLiveMats = rawDocMats.some(m => !m.periodoAcademico || m.periodoAcademico !== activePeriodName);
 
         if (matchingActiveMats.length > 0) {
           docMats = matchingActiveMats;
-        } else if (hasOtherPeriodLiveMats) {
-          // Si se reabrió un período anterior cuya carga reside en cargas_historicas mientras docentes_materias aún refleja otro período, usar la carga histórica del período activo real
-          if (fbMats.length > 0) {
-            docMats = fbMats;
-            usedHistoricFallback = true;
-          } else if (hasHistoricSnapshotForActive) {
-            docMats = [];
-            usedHistoricFallback = true;
-          } else {
-            docMats = rawDocMats;
-          }
         } else if (fbMats.length > 0) {
+          // Si la carga del período activo reside en cargas_historicas (ej. tras reactivar un período), usarla
           docMats = fbMats;
           usedHistoricFallback = true;
+        } else if (hasHistoricSnapshotForActive || hasOtherPeriodLiveMats) {
+          // Nunca mostrar materias de un período cerrado u otro período en el período activo
+          docMats = [];
+          usedHistoricFallback = hasHistoricSnapshotForActive;
         }
       } else {
         docMats = rawDocMats.length > 0 ? rawDocMats : fbMats;
@@ -452,8 +446,10 @@ router.post('/docentes/validar-portal', createRateLimiter(20, 10 * 60 * 1000, 'D
       });
     }
 
-    const [materias] = await db.query('SELECT * FROM docentes_materias WHERE docente_cedula = ?', [existingStaff.cedula]);
-    existingStaff.materias = materias || [];
+    const [allMaterias] = await db.query('SELECT * FROM docentes_materias WHERE docente_cedula = ?', [existingStaff.cedula]);
+    const currentPeriod = existingStaff.periodoAcademico || '2026-I';
+    const materias = (allMaterias || []).filter(m => m.periodoAcademico === currentPeriod);
+    existingStaff.materias = materias;
     existingStaff.department = normalizeDepartmentName(existingStaff.department);
 
     const hasCargaActiva = existingStaff.materias && existingStaff.materias.length > 0;
@@ -461,7 +457,6 @@ router.post('/docentes/validar-portal', createRateLimiter(20, 10 * 60 * 1000, 'D
     const finalCurrentStatus = (!hasCargaActiva && (existingStaff.status === 'Validado' || existingStaff.status === 'Activo')) ? 'Por Revisar' : (existingStaff.status || 'Por Revisar');
 
     const mapLapsos = new Map();
-    const currentPeriod = existingStaff.periodoAcademico || '2026-I';
     mapLapsos.set(currentPeriod, {
       periodo: currentPeriod,
       status: finalCurrentStatus,
