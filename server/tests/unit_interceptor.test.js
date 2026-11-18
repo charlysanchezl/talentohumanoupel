@@ -2,6 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { isTargetQuery, handleInterceptedQuery } = require('../utils/sql3NFInterceptor');
 const adapter = require('../utils/docente3NFAdapter');
+const cacheService = require('../services/docentesCache.service');
 
 describe('Suite de Pruebas Unitarias: Interceptor y Adaptador 3NF', () => {
 
@@ -169,6 +170,26 @@ describe('Suite de Pruebas Unitarias: Interceptor y Adaptador 3NF', () => {
       const deleteQuery = queries.find(q => q.sql.includes('DELETE ca FROM cargas_academicas_v3'));
       assert.ok(deleteQuery, 'Debe ejecutar DELETE en cargas_academicas_v3');
       assert.deepStrictEqual(deleteQuery.params, [10, 2]);
+    });
+
+    it('updateDocenteInCache() debe actualizar solo el periodo activo y preservar caches historicos', () => {
+      cacheService.apiMemoryCache.docentes.clear();
+      cacheService.setDocentesCache('ACTUAL', [{ cedula: 'V-18959604', status: 'Por Revisar', materias: [] }]);
+      cacheService.setDocentesCache('2026-I', [{ cedula: 'V-18959604', status: 'Cerrado', materias: [{ nombre: 'TIC I' }] }]);
+
+      cacheService.updateDocenteInCache('V-18959604', {
+        status: 'Validado',
+        periodoAcademico: '2026-II',
+        materias: [{ nombre: 'TIC III' }]
+      });
+
+      const activeList = cacheService.getDocentesCache('ACTUAL');
+      const historicList = cacheService.getDocentesCache('2026-I');
+      assert.strictEqual(activeList[0].status, 'Validado');
+      assert.strictEqual(activeList[0].materias[0].nombre, 'TIC III');
+      assert.strictEqual(historicList[0].status, 'Cerrado');
+      assert.strictEqual(historicList[0].materias[0].nombre, 'TIC I');
+      cacheService.apiMemoryCache.docentes.clear();
     });
   });
 

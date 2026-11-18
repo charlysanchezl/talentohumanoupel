@@ -19,7 +19,13 @@ function getDocentesCache(key) {
   return item.data;
 }
 
+const MAX_CACHE_ENTRIES = 25;
+
 function setDocentesCache(key, data) {
+  if (apiMemoryCache.docentes.size >= MAX_CACHE_ENTRIES && !apiMemoryCache.docentes.has(key)) {
+    const oldestKey = apiMemoryCache.docentes.keys().next().value;
+    if (oldestKey !== undefined) apiMemoryCache.docentes.delete(oldestKey);
+  }
   apiMemoryCache.docentes.set(key, {
     data,
     expiresAt: Date.now() + apiMemoryCache.TTL_MS
@@ -36,7 +42,10 @@ function triggerRealtimeSync() {
 }
 
 function updateDocenteInCache(cedula, partialData) {
-  for (const [, cacheEntry] of apiMemoryCache.docentes.entries()) {
+  const targetPeriodo = partialData?.periodoAcademico;
+  for (const [cacheKey, cacheEntry] of apiMemoryCache.docentes.entries()) {
+    const isActiveCache = cacheKey === 'ACTUAL' || cacheKey === 'Todos' || (targetPeriodo && cacheKey === targetPeriodo);
+    if (!isActiveCache) continue;
     if (Array.isArray(cacheEntry.data)) {
       const idx = cacheEntry.data.findIndex(d => d.cedula === cedula);
       if (idx !== -1) {
@@ -91,5 +100,6 @@ module.exports = {
   getDocentesCache,
   setDocentesCache,
   updateDocenteInCache,
-  invalidateDocentesCache
+  invalidateDocentesCache,
+  triggerRealtimeSync
 };

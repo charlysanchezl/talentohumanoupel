@@ -13,6 +13,7 @@ const {
   setDocentesCache,
   updateDocenteInCache,
   invalidateDocentesCache,
+  triggerRealtimeSync,
   pendingDocentesFetches
 } = require('../services/docentesCache.service');
 
@@ -1293,7 +1294,7 @@ router.put('/docentes/carga', requireRole(['ADMIN', 'DOCENCIA', 'JEFE']), async 
     if (cleanCedula !== canonicalCedula) {
       updateDocenteInCache(cleanCedula, cachePatch);
     }
-    invalidateDocentesCache(true);
+    triggerRealtimeSync();
     res.json({ success: true, isPlanificacion: false });
   } catch (error) {
     console.error('Error in /api/docentes/carga:', error);
