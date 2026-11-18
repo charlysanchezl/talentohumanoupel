@@ -447,17 +447,28 @@ router.put('/periodos/:id/reactivar', requireRole(['ADMIN', 'DOCENCIA', 'AUDITOR
   }
 });
 
-// Listar períodos
+// Listar períodos (consulta directa 3NF sin interceptor regex)
 router.get('/periodos', async (req, res) => {
   try {
     await verificarCierreAutomaticoLapsos();
-    const [rows] = await db.query(`
-      SELECT p.*,
+    const exec = typeof db.nativeQuery === 'function' ? db.nativeQuery.bind(db) : db.query.bind(db);
+    const [rows] = await exec(`
+      SELECT
+        p.id AS id,
+        p.nombre AS nombre,
+        p.estado AS estado,
+        p.semanas AS semanas,
+        IFNULL(DATE_FORMAT(p.fecha_inicio, '%Y-%m-%d'), '') AS fechaDesde,
+        IFNULL(DATE_FORMAT(p.fecha_fin, '%Y-%m-%d'), '') AS fechaHasta,
+        IFNULL(p.observaciones, '') AS observaciones,
+        p.creado_el AS fechaCreacion,
+        p.fecha_activacion AS fechaActivacion,
+        p.fecha_cierre AS fechaCierre,
         CASE 
-          WHEN p.estado = 'ACTIVO' THEN (SELECT COUNT(*) FROM docentes)
-          ELSE (SELECT COUNT(*) FROM cargas_historicas ch WHERE ch.periodoAcademico = p.nombre)
+          WHEN p.estado = 'ACTIVO' THEN (SELECT COUNT(*) FROM docentes_v3)
+          ELSE (SELECT COUNT(*) FROM cargas_historicas ch WHERE ch.periodo_id = p.id)
         END AS docentesCount
-      FROM periodos_academicos p
+      FROM periodos_academicos_v3 p
       ORDER BY 
         CASE p.estado 
           WHEN 'ACTIVO' THEN 1 
@@ -1057,13 +1068,14 @@ router.get('/periodos/:nombre/necesidades', requireStaffAuth, async (req, res) =
   }
 });
 
-// HISTÓRICO DE PERÍODOS
+// HISTÓRICO DE PERÍODOS (consulta directa 3NF sin interceptor regex)
 router.get('/historico-periodos', async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const exec = typeof db.nativeQuery === 'function' ? db.nativeQuery.bind(db) : db.query.bind(db);
+    const [rows] = await exec(`
       SELECT DISTINCT p.nombre AS periodoAcademico 
-      FROM periodos_academicos p 
-      INNER JOIN cargas_historicas ch ON ch.periodoAcademico = p.nombre 
+      FROM periodos_academicos_v3 p 
+      INNER JOIN cargas_historicas ch ON ch.periodo_id = p.id 
       WHERE p.estado = 'CERRADO' 
       ORDER BY p.nombre DESC
     `);
