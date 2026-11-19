@@ -672,7 +672,7 @@ const PeriodManagementModal = ({ isOpen, onClose, onPeriodActivated, initialPeri
                                 checked={editForm.propagarADocentes !== false} 
                                 onChange={(e) => setEditForm({ ...editForm, propagarADocentes: e.target.checked })} 
                               />
-                              <span>Actualizar fechas y vigencia en las fichas docentes (manteniendo horas en 15 semanas)</span>
+                              <span>Actualizar fechas del período académico en las fichas docentes (manteniendo horas en 15 semanas)</span>
                             </label>
 
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1296,7 +1296,7 @@ const PeriodManagementModal = ({ isOpen, onClose, onPeriodActivated, initialPeri
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: '#166534', fontWeight: 700, fontSize: '0.86rem' }}>
                     <Calendar size={17} color="#16a34a" />
-                    <span>Fechas Oficiales de Vigencia (Calendario UPEL)</span>
+                    <span>Fechas del Período Académico (Calendario UPEL)</span>
                   </div>
                   <span style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: 600, background: '#dcfce7', padding: '0.15rem 0.55rem', borderRadius: '99px' }}>
                     Calendario Oficial

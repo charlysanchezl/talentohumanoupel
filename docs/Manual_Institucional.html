@@ -3,158 +3,450 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manual de Usuario Institucional - UPEL</title>
+    <title>Manual Institucional y Operativo v2.0 — UPEL SIGOA</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f9fafb;
+        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Inter:wght@400;500;600;700&display=swap');
+        :root {
+            --upel-blue: #1e3a8a;
+            --upel-blue-dark: #172554;
+            --upel-accent: #2563eb;
+            --upel-bg: #f8fafc;
+            --border-color: #e2e8f0;
+            --text-main: #1e293b;
+            --text-muted: #475569;
         }
-        h1, h2, h3 { color: #1e3a8a; }
-        h1 { border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; }
-        h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 30px; }
-        .note {
-            background-color: #eff6ff;
-            border-left: 4px solid #3b82f6;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.65;
+            color: var(--text-main);
+            background-color: var(--upel-bg);
+            margin: 0;
+            padding: 24px 16px;
         }
         .container {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 1040px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 44px 48px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+            border: 1px solid var(--border-color);
         }
-        img {
-            max-width: 100%;
-            height: auto;
+        .doc-header {
+            border-bottom: 3px solid var(--upel-blue);
+            padding-bottom: 20px;
+            margin-bottom: 28px;
+        }
+        .badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .badge {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: var(--upel-blue);
+            border: 1px solid #bfdbfe;
+        }
+        h1 {
+            color: var(--upel-blue-dark);
+            margin: 0 0 8px 0;
+            font-size: 1.95rem;
+            line-height: 1.25;
+        }
+        .subtitle {
+            color: var(--text-muted);
+            margin: 0;
+            font-size: 1rem;
+        }
+        h2 {
+            color: var(--upel-blue);
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 6px;
+            margin-top: 38px;
+            font-size: 1.35rem;
+            page-break-after: avoid;
+        }
+        h3 {
+            color: var(--upel-blue-dark);
+            margin-top: 22px;
+            font-size: 1.08rem;
+            page-break-after: avoid;
+        }
+        .toc {
+            background: #f1f5f9;
+            padding: 20px 26px;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            margin-bottom: 30px;
+        }
+        .toc h2 {
+            margin-top: 0;
+            border-bottom: none;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+        .toc ol {
+            margin: 0;
+            padding-left: 20px;
+            columns: 2;
+            column-gap: 32px;
+        }
+        .toc a {
+            color: var(--upel-blue);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .toc a:hover { text-decoration: underline; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0 24px 0;
+            font-size: 0.92rem;
+        }
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background: #eff6ff;
+            color: var(--upel-blue-dark);
+            font-weight: 600;
+        }
+        tr:nth-child(even) td { background: #f8fafc; }
+        code {
+            background: #f1f5f9;
+            color: #0f172a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 0.88em;
+        }
+        pre {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 16px 18px;
             border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }
+        pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+        .note {
+            background-color: #eff6ff;
+            border-left: 4px solid var(--upel-accent);
+            padding: 14px 16px;
+            margin: 18px 0;
+            border-radius: 6px;
+        }
+        .caution {
+            background-color: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 14px 16px;
+            margin: 18px 0;
+            border-radius: 6px;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .card {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px 18px;
+        }
+        .card h4 {
+            margin: 0 0 8px 0;
+            color: var(--upel-blue-dark);
+        }
+        .diagram-box {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
             margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
         }
-        ul, ol { margin-bottom: 20px; }
-        li { margin-bottom: 8px; }
-        .toc { background: #f1f5f9; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .doc-footer {
+            margin-top: 48px;
+            text-align: center;
+            padding-top: 22px;
+            border-top: 2px solid var(--upel-blue);
+        }
+        @media (max-width: 720px) {
+            .container { padding: 24px 18px; }
+            .toc ol { columns: 1; }
+        }
+        @media print {
+            body { background: #ffffff; padding: 0; }
+            .container { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+            .toc ol { columns: 2; }
+            a { color: #000000; text-decoration: none; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Manual de Usuario Institucional</h1>
-        <p><strong>Sistema de Gestión de Talento Humano UPEL</strong></p>
-        <p>Este documento de carácter institucional describe los lineamientos y pasos para el uso correcto del Sistema de Gestión de Talento Humano de la Universidad Pedagógica Experimental Libertador (UPEL), segmentado de acuerdo a las responsabilidades de cada usuario.</p>
-        
-        <div class="toc">
-            <h2>ÍNDICE</h2>
+        <header class="doc-header">
+            <div class="badge-row">
+                <span class="badge">UPEL · IPR Gervasio Rubio</span>
+                <span class="badge">Manual Institucional v2.0</span>
+                <span class="badge">Arquitectura 3NF &amp; Cloud AWS</span>
+                <span class="badge">Producción: https://3.133.148.107/</span>
+            </div>
+            <h1>Manual Institucional y de Operación Técnica — UPEL SIGOA</h1>
+            <p class="subtitle">Sistema Integrado de Gestión, Organización Académica y Talento Humano — Cobertura: Sede Principal <strong>Rubio</strong>, Extensión <strong>Sabana de Mendoza</strong> y Extensión <strong>Encontrados</strong>.</p>
+        </header>
+
+        <nav class="toc">
+            <h2>Índice General</h2>
             <ol>
-                <li><a href="#lineamientos">Lineamientos Generales</a></li>
-                <li><a href="#portal">Portal del Docente (Autogestión)</a></li>
-                <li><a href="#jefes">Guía para Jefes de Departamento</a></li>
-                <li><a href="#talento">Guía para la Coordinación de Talento Humano (Administradores)</a></li>
+                <li><a href="#alcance">Propósito y Estructura Organizativa</a></li>
+                <li><a href="#arquitectura">Arquitectura General y Stack Tecnológico</a></li>
+                <li><a href="#seguridad">Seguridad, Autenticación y Roles (RBAC/ABAC)</a></li>
+                <li><a href="#perfiles">Guía Operativa por Perfil Institucional</a></li>
+                <li><a href="#resiliencia">Bóveda de Respaldos, Offline y Mesh P2P</a></li>
+                <li><a href="#datos3nf">Arquitectura de Datos 3NF</a></li>
+                <li><a href="#endpoints">Referencia de Rutas Web y Endpoints API</a></li>
+                <li><a href="#aws">Infraestructura AWS EC2 y Despliegue</a></li>
+                <li><a href="#local">Operación Local en Windows</a></li>
+                <li><a href="#qa">Aseguramiento de Calidad e Incidentes</a></li>
             </ol>
-        </div>
+        </nav>
 
-        <h2 id="lineamientos">1. Lineamientos Generales</h2>
-        <p>El sistema está diseñado para auditar, controlar y organizar la distribución de la carga académica de los docentes. El ingreso se realiza a través del portal institucional suministrado por la universidad.</p>
+        <section id="alcance">
+            <h2>1. Propósito, Alcance Institucional y Estructura Organizativa</h2>
+            <p><strong>UPEL SIGOA</strong> es la plataforma institucional encargada de auditar, normalizar, planificar y respaldar el registro de personal docente, formación académica, datos bancarios, contrataciones, carga académica por lapso y programación de unidades curriculares en el Instituto Pedagógico Rural <em>Gervasio Rubio</em>.</p>
+            <div class="grid-2">
+                <div class="card">
+                    <h4>Sedes Institucionales</h4>
+                    <ul>
+                        <li><strong>Rubio:</strong> Sede Principal</li>
+                        <li><strong>Sabana de Mendoza:</strong> Extensión Trujillo</li>
+                        <li><strong>Encontrados:</strong> Extensión Zulia</li>
+                    </ul>
+                    <h4>Departamentos Académicos (4)</h4>
+                    <ul>
+                        <li><code>Matemática</code></li>
+                        <li><code>Pedagogía</code></li>
+                        <li><code>Ciencias Sociales</code></li>
+                        <li><code>Agroindustrial</code></li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>Especialidades Curriculares Activas (14)</h4>
+                    <p style="margin:0;font-size:0.9rem;">Artes Escénicas · Educación Agropecuaria · Educación Especial para Personas en Situación de Discapacidad · Educación Física · Educación Informática · Educación Inglés · Educación Inicial · Educación Musical · Educación Primaria · Educación Rural · Educación Socioproductiva · Geografía e Historia · Lengua y Literatura · Matemática.</p>
+                </div>
+            </div>
+        </section>
 
-        <h3>Especialidades / Departamentos Activos</h3>
-        <p>El sistema actualmente maneja y clasifica a los docentes según las siguientes especialidades adscritas a la UPEL:</p>
-        <ul>
-            <li><strong>Educación Física</strong></li>
-            <li><strong>Matemática</strong></li>
-            <li><strong>Informática</strong></li>
-            <li><strong>Geografía e Historia</strong></li>
-            <li><strong>Inicial</strong></li>
-            <li><strong>Primaria</strong></li>
-            <li><strong>Agropecuaria</strong></li>
-            <li><strong>Rural</strong></li>
-            <li><strong>Musical</strong></li>
-        </ul>
-        
-        <img src="file:///C:/Users/User/.gemini/antigravity/brain/f5516355-08c0-436f-83b2-fd97ba625aee/login_page_mockup_1785104810715.jpg" alt="Pantalla de Login">
-        
-        <h3>1.1 Ingreso Seguro</h3>
-        <ul>
-            <li><strong>Credenciales:</strong> Todo el personal autorizado recibirá un usuario y contraseña.</li>
-            <li><strong>Responsabilidad:</strong> Las credenciales son intransferibles. Cualquier modificación en la carga de un docente quedará registrada bajo la responsabilidad del usuario que inició la sesión.</li>
-        </ul>
+        <section id="arquitectura">
+            <h2>2. Arquitectura General y Stack Tecnológico</h2>
+            <div class="diagram-box">
+                <svg viewBox="0 0 860 190" width="100%" style="max-width:820px;height:auto;" aria-label="Diagrama de Arquitectura UPEL SIGOA">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 1 L 10 5 L 0 9 z" fill="#1e3a8a" />
+                        </marker>
+                    </defs>
+                    <rect x="10" y="55" width="165" height="75" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+                    <text x="92" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">Navegador SPA</text>
+                    <text x="92" y="104" text-anchor="middle" font-size="11" fill="#475569">React 19 + Vite 8</text>
+                    <text x="92" y="120" text-anchor="middle" font-size="10" fill="#475569">Offline / Mesh QR</text>
 
-        <h2 id="portal">2. Portal del Docente (Autogestión)</h2>
-        <p>El <strong>Portal del Docente</strong> es una sección de acceso público diseñada para que los propios profesores puedan registrar sus datos en la plataforma, consultar el estado de su carga académica y descargar su ficha oficial sin necesidad de usuario y contraseña administrativa.</p>
-        
-        <h3>2.1 Validación y Registro</h3>
-        <ol>
-            <li>Al ingresar a la página de registro público (Portal Docente), el sistema solicitará el número de <strong>Cédula de Identidad</strong>.</li>
-            <li><strong>Si el docente es nuevo:</strong> El sistema le mostrará un formulario en blanco donde deberá llenar todos sus datos. Una vez que guarde la información, su estado pasará a "Por Revisar" hasta que Talento Humano y su Jefe de Departamento validen su carga.</li>
-            <li><strong>Si el docente ya está registrado:</strong> El sistema verificará su identidad y le permitirá acceder a su información actual.</li>
-        </ol>
+                    <line x1="175" y1="92" x2="225" y2="92" stroke="#1e3a8a" stroke-width="2" marker-end="url(#arrow)"/>
+                    <rect x="225" y="55" width="165" height="75" rx="8" fill="#ecfeff" stroke="#0891b2" stroke-width="1.5"/>
+                    <text x="307" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#155e75">Nginx HTTPS/2</text>
+                    <text x="307" y="104" text-anchor="middle" font-size="11" fill="#475569">SSL Let's Encrypt</text>
+                    <text x="307" y="120" text-anchor="middle" font-size="10" fill="#475569">Puerto 443 -&gt; 3001</text>
 
-        <h3>2.2 Consulta de Estado e Impresión de Ficha</h3>
-        <ul>
-            <li><strong>Ver su Estatus Actual:</strong> Revisar si su carga académica se encuentra "Por Revisar" o "Validada" por su respectivo departamento.</li>
-            <li><strong>Descargar Ficha Oficial:</strong> Hacer clic en el botón de <strong>Imprimir Ficha</strong>, lo que generará un documento oficial para imprimir.</li>
-        </ul>
-        <div class="note">
-            <strong>Nota:</strong> Los docentes no pueden modificar su propia carga de materias ni sus horas directamente. Cualquier discrepancia debe ser notificada a su Jefe de Departamento.
-        </div>
+                    <line x1="390" y1="92" x2="440" y2="92" stroke="#1e3a8a" stroke-width="2" marker-end="url(#arrow)"/>
+                    <rect x="440" y="45" width="185" height="95" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+                    <text x="532" y="74" text-anchor="middle" font-size="13" font-weight="700" fill="#166534">Express API + PM2</text>
+                    <text x="532" y="93" text-anchor="middle" font-size="11" fill="#475569">127.0.0.1:3001 (upel-sigoa)</text>
+                    <text x="532" y="110" text-anchor="middle" font-size="10" fill="#475569">JWT + RBAC/ABAC + SSE</text>
+                    <text x="532" y="126" text-anchor="middle" font-size="10" fill="#475569">sql3NFInterceptor.js</text>
 
-        <h2 id="jefes">3. Guía para Jefes de Departamento</h2>
-        <p>El rol principal del <strong>Jefe de Departamento</strong> es gestionar estrictamente a los docentes adscritos a su especialidad.</p>
+                    <line x1="625" y1="92" x2="675" y2="92" stroke="#1e3a8a" stroke-width="2" marker-end="url(#arrow)"/>
+                    <rect x="675" y="55" width="175" height="75" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
+                    <text x="762" y="85" text-anchor="middle" font-size="13" font-weight="700" fill="#854d0e">MySQL / MariaDB</text>
+                    <text x="762" y="104" text-anchor="middle" font-size="11" fill="#475569">Esquema 3NF (*_v3)</text>
+                    <text x="762" y="120" text-anchor="middle" font-size="10" fill="#475569">Pool 75 conns (mysql2)</text>
+                </svg>
+            </div>
+            <table>
+                <thead>
+                    <tr><th>Capa</th><th>Tecnología / Archivo</th><th>Responsabilidad Principal</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Frontend SPA</strong></td><td>React <code>^19.2.7</code>, Vite <code>^8.1.1</code>, <code>src/App.jsx</code></td><td>Enrutamiento protegido, <code>lazyWithRetry</code>, exportación Excel/PDF bajo demanda y Lockscreen de mantenimiento</td></tr>
+                    <tr><td><strong>Backend API</strong></td><td>Node.js, Express <code>^4.19.2</code>, <code>server/index.js</code></td><td>API REST <code>/api/*</code>, servicio estático <code>dist/</code>, SSE en tiempo real y cierre horario de lapsos</td></tr>
+                    <tr><td><strong>Persistencia y 3NF</strong></td><td><code>mysql2 ^3.10.0</code>, <code>server/db.js</code>, <code>sql3NFInterceptor.js</code></td><td>Pool de <code>75</code> conexiones en modo estándar, <code>group_concat_max_len = 4194304</code> y traducción 3NF hacia <code>*_v3</code></td></tr>
+                    <tr><td><strong>Resiliencia Offline</strong></td><td><code>offlineManager.js</code>, <code>meshP2PEngine.js</code></td><td>Cola optimista offline, sincronización batch y contingencia P2P mediante códigos QR</td></tr>
+                </tbody>
+            </table>
+        </section>
 
-        <h3>3.1 Panel de Inicio</h3>
-        <p>Al iniciar sesión, el sistema reconocerá tu departamento y bloqueará automáticamente el acceso a otras especialidades. En tu pantalla de inicio verás:</p>
-        <ul>
-            <li>Un listado de los docentes de tu departamento.</li>
-            <li>Indicadores del estatus de su carga (Por revisar, Validado).</li>
-        </ul>
+        <section id="seguridad">
+            <h2>3. Modelo de Seguridad, Autenticación y Roles (RBAC/ABAC)</h2>
+            <ul>
+                <li><strong>Hashing <code>bcrypt</code>:</strong> Todas las claves se almacenan cifradas con <code>bcrypt</code> (<code>server/utils/security.js</code>). Al iniciar el servidor, <code>migrateLegacyPlaintextPasswords()</code> migra automáticamente credenciales heredadas en texto plano.</li>
+                <li><strong>JWT sin estado:</strong> Verificación en <code>server/middlewares/auth.js</code> vía <code>Authorization: Bearer &lt;token&gt;</code> o parámetro <code>?token=</code>.</li>
+                <li><strong>Bloqueo por fuerza bruta:</strong> <code>POST /api/login</code> limita a <strong>5 intentos fallidos</strong> por IP antes de bloquear durante <strong>5 minutos</strong> (<code>LOCKOUT_TIME_MS = 5 * 60 * 1000</code>, exento <code>localhost</code>).</li>
+                <li><strong>Aislamiento ABAC:</strong> <code>DOCENTE_PORTAL</code> solo accede a su propia cédula (<code>canAccessDocenteRecord</code>) y <code>JEFE</code> queda restringido a su departamento académico.</li>
+            </ul>
+            <table>
+                <thead>
+                    <tr><th>Ruta / Capacidad</th><th>DOCENTE_PORTAL</th><th>JEFE</th><th>DOCENCIA</th><th>AUDITOR</th><th>ADMIN</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Portal Autogestión (<code>/registro</code>)</td><td>Propia cédula</td><td>Público</td><td>Público</td><td>Público</td><td>Público</td></tr>
+                    <tr><td>Dashboard Ejecutivo (<code>/</code>)</td><td>—</td><td>Redirige</td><td>Redirige</td><td>Lectura</td><td>Completo</td></tr>
+                    <tr><td>Departamento (<code>/departamento/:deptName</code>)</td><td>—</td><td>Solo su depto.</td><td>Gestión</td><td>Consulta</td><td>Completo</td></tr>
+                    <tr><td>Consulta Global (<code>/consultar</code>)</td><td>—</td><td>Sí</td><td>Sí</td><td>Sí</td><td>Sí</td></tr>
+                    <tr><td>Programación Académica (<code>/docencia</code>)</td><td>—</td><td>Sí</td><td>Sí</td><td>Sí</td><td>Sí</td></tr>
+                    <tr><td>Red Mesh P2P (<code>/mesh</code>)</td><td>—</td><td>Sí</td><td>Sí</td><td>Sí</td><td>Sí</td></tr>
+                    <tr><td>Auditoría (<code>/auditoria</code>)</td><td>—</td><td>—</td><td>—</td><td>Lectura</td><td>Lectura + Purga</td></tr>
+                    <tr><td>Usuarios (<code>/usuarios</code>) y Respaldos (<code>/respaldos</code>)</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Completo</td></tr>
+                </tbody>
+            </table>
+        </section>
 
-        <h3>3.2 Asignación de Carga Académica</h3>
-        <ol>
-            <li>Haz clic en el botón <strong>Revisar / Validar</strong> junto al nombre del docente.</li>
-            <li>Desplázate hacia la sección <strong>"Carga Académica"</strong>.</li>
-            <li><strong>Seleccionar Materia:</strong> Usa el menú desplegable para buscar la unidad curricular.</li>
-            <li><strong>Asignación de Horas:</strong> Ingresa el número correspondiente en Horas Semanales y Horas Lapso.</li>
-            <li>Si el docente tiene más de una materia, utiliza el botón para añadir una nueva fila.</li>
-            <li>Haz clic en <strong>Guardar Carga</strong> al finalizar.</li>
-        </ol>
+        <section id="perfiles">
+            <h2>4. Guía Operativa por Perfil Institucional</h2>
+            <h3>4.1 Portal del Docente (<code>/registro</code>)</h3>
+            <ol>
+                <li>Ingresar número de cédula y clave personal (<code>POST /api/docentes/validar-portal</code>).</li>
+                <li>Si es docente nuevo, completar el asistente de ficha (datos personales, formación, datos bancarios). El expediente queda en estado <em>Por Revisar</em>.</li>
+                <li>Si olvidó la clave, usar recuperación (<code>POST /api/docentes/recuperar-clave</code>) validando cédula + correo registrado: restablece temporalmente a los últimos 4 dígitos de la cédula y solicita nueva clave (<code>/api/docentes/cambiar-clave-portal</code>, mínimo 4 caracteres).</li>
+                <li>Consultar estatus (<em>Por Revisar</em> / <em>Validado</em>), actualizar ficha personal (<code>/api/docentes/portal-actualizar-ficha</code>) e imprimir la ficha oficial.</li>
+            </ol>
+            <div class="note"><strong>Regla Institucional:</strong> El docente no puede modificar directamente su propia carga académica ni sus horas semanales; dicha asignación corresponde exclusivamente a Jefatura de Departamento, Docencia o Talento Humano.</div>
 
-        <h3>3.3 Emisión de Fichas</h3>
-        <p>Una vez cargada la información, puedes hacer clic en el ícono de la <strong>Impresora</strong> al lado del docente. Esto generará un documento formal con su carga académica consolidada.</p>
+            <h3>4.2 Jefatura de Departamento (<code>/departamento/:deptName</code>)</h3>
+            <ul>
+                <li>Al iniciar sesión en <code>/login</code>, el sistema aísla automáticamente la vista al departamento asignado.</li>
+                <li>Permite validar datos del docente, asignar unidades curriculares del catálogo y registrar horas semanales/lapso y sede (<code>PUT /api/docentes/carga</code>), así como emitir la ficha impresa e inspeccionar el histórico (<code>GET /api/docentes/:cedula/historico</code>).</li>
+            </ul>
 
-        <h2 id="talento">4. Guía para Talento Humano (Administradores)</h2>
-        <p>El equipo de <strong>Talento Humano</strong> tiene privilegios globales sobre la plataforma. Su función es alimentar la base de datos de docentes, auditar a los departamentos y mantener actualizado el catálogo de materias.</p>
+            <h3>4.3 Subdirección de Docencia (<code>/docencia</code>)</h3>
+            <p>El módulo <code>ProgramacionAcademica.jsx</code> integra tres pestañas operativas:</p>
+            <ul>
+                <li><strong>Oferta Académica:</strong> Filtro por período, sede, especialidad y exportación Excel.</li>
+                <li><strong>Materias Huérfanas (<code>GET /api/periodos/:nombre/huerfanas</code>):</strong> Detecta asignaturas del catálogo sin docente asignado en el lapso.</li>
+                <li><strong>Cuadro Consolidado de Necesidades (<code>GET /api/periodos/:nombre/necesidades</code>):</strong> Reporte ejecutivo de cobertura docente para Consejo Académico.</li>
+            </ul>
 
-        <img src="file:///C:/Users/User/.gemini/antigravity/brain/f5516355-08c0-436f-83b2-fd97ba625aee/dashboard_mockup_1785104847147.jpg" alt="Panel Principal">
+            <h3>4.4 Talento Humano (<code>ADMIN</code>) y Auditoría (<code>AUDITOR</code>)</h3>
+            <ul>
+                <li><strong><code>ADMIN</code>:</strong> Administra el Dashboard (<code>/</code>), consulta global, altas/bajas docentes, catálogo de materias (<code>/api/materias-catalogo</code>), gestión de cuentas (<code>/usuarios</code>), identidad visual/correo, Bóveda de Respaldos (<code>/respaldos</code>) y purga controlada de bitácora (<code>POST /api/audit/purge</code>).</li>
+                <li><strong><code>AUDITOR</code>:</strong> Supervisión de lectura sobre Dashboard, Consulta, Programación, Mesh y Bitácora de Auditoría (<code>/auditoria</code>).</li>
+            </ul>
+        </section>
 
-        <h3>4.1 Gestión Global de Docentes</h3>
-        <ul>
-            <li><strong>Creación:</strong> Haciendo clic en "+ Nuevo Docente", se abrirá un formulario institucional.</li>
-            <li><strong>Edición y Egreso:</strong> Solo los administradores pueden modificar la información personal de un docente o eliminarlo del sistema (botón de la papelera).</li>
-        </ul>
+        <section id="resiliencia">
+            <h2>5. Bóveda de Respaldos, Offline, Mesh P2P y Períodos Académicos</h2>
+            <table>
+                <thead>
+                    <tr><th>Módulo / Ruta</th><th>Capacidades Clave</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Bóveda (<code>/respaldos</code>)</strong></td><td>Volcado completo <code>.sql</code> streaming y <code>.json</code>; restauración desde snapshot; limpieza de bitácora (<code>diasRetencion = 180</code>); diagnóstico y reparación de integridad; y <strong>Modo Mantenimiento Estricto</strong> (<code>server/maintenance_config.json</code>) que bloquea sesiones no-<code>ADMIN</code> con <code>MaintenanceLockscreen</code>.</td></tr>
+                    <tr><td><strong>Offline y Mesh P2P (<code>/mesh</code>)</strong></td><td>Cola de mutaciones local ante caída de red con sincronización en lote (<code>POST /api/sync/batch</code>) y 4 vistas Mesh (<code>radar</code>, <code>qr</code>, <code>contingencia</code>, <code>log</code>) para intercambiar paquetes por códigos QR y hacer uplink consolidado al servidor.</td></tr>
+                    <tr><td><strong>Períodos (<code>YYYY-I</code> / <code>YYYY-II</code>)</strong></td><td>Activación única de lapso, replicación entre períodos (<code>POST /api/periodos/replicar</code>), cierre histórico (<code>PUT /api/periodos/:id/cerrar</code>), reactivación auditada (<code>PUT /api/periodos/:id/reactivar</code>) y cierre automático horario en <code>server/index.js</code>.</td></tr>
+                </tbody>
+            </table>
+        </section>
 
-        <h3>4.2 Auditoría de Departamentos</h3>
-        <p>Talento Humano puede hacer clic en la sección de <strong>Departamentos</strong> y entrar libremente a cualquiera de ellos para monitorear si los Jefes ya han cargado las horas.</p>
+        <section id="datos3nf">
+            <h2>6. Arquitectura de Datos en Tercera Forma Normal (3NF)</h2>
+            <p><code>sql3NFInterceptor.js</code> y <code>docente3NFAdapter.js</code> traducen de manera transparente las operaciones lógicas hacia el esquema normalizado físico:</p>
+            <ul>
+                <li><code>docentes_v3</code>, <code>docentes_formacion_academica_v3</code>, <code>especialidades_v3</code></li>
+                <li><code>docentes_datos_bancarios_v3</code>, <code>bancos_v3</code></li>
+                <li><code>docentes_contrataciones_v3</code>, <code>departamentos_v3</code>, <code>sedes_v3</code></li>
+                <li><code>cargas_academicas_v3</code>, <code>materias_catalogo_v3</code>, <code>periodos_academicos_v3</code></li>
+                <li><code>cargas_historicas</code>, <code>cargas_historicas_materias_v3</code></li>
+            </ul>
+        </section>
 
-        <h3>4.3 Gestión del Catálogo de Materias</h3>
-        <p>Si hace falta una materia nueva que no está en la lista desplegable:</p>
-        <ol>
-            <li>Ingresa al perfil de cualquier docente (botón Editar).</li>
-            <li>En la sección de Carga Académica, selecciona <strong>"Añadir Nueva Materia al Sistema"</strong>.</li>
-            <li>Escribe el nombre oficial y apruébalo. La materia quedará guardada en la base de datos general para toda la universidad.</li>
-        </ol>
+        <section id="endpoints">
+            <h2>7. Referencia Rápida de Endpoints API (<code>/api</code>)</h2>
+            <ul>
+                <li><strong>Salud:</strong> <code>GET /api/health</code> (ejecuta <code>SELECT 1</code> con timeout de 2000ms -&gt; <code>{"ok":true,"db":"ok"}</code>).</li>
+                <li><strong>Sesión:</strong> <code>POST /api/login</code>.</li>
+                <li><strong>Docentes:</strong> <code>GET/POST /api/docentes</code>, <code>DELETE /api/docentes/:cedula</code>, <code>PUT /api/docentes/carga</code>, <code>GET /api/docentes/:cedula/historico</code>, <code>POST /api/docentes/validar-portal</code>, <code>/recuperar-clave</code>, <code>/cambiar-clave-portal</code>, <code>/portal-actualizar-ficha</code>.</li>
+                <li><strong>Períodos y Materias:</strong> <code>/api/periodos/*</code>, <code>GET /api/historico-periodos</code>, <code>GET/POST /api/materias-catalogo</code>.</li>
+                <li><strong>Seguridad y Bóveda:</strong> <code>/api/users/*</code>, <code>/api/autorizaciones/*</code>, <code>/api/audit</code>, <code>/api/audit/purge</code>, <code>/api/backup/*</code>.</li>
+                <li><strong>Sync, Config, Correo e IA:</strong> <code>/api/sync/*</code>, <code>/api/config/*</code>, <code>/api/mail-config</code>, <code>/api/send-ficha-email</code>, <code>/api/ai/*</code>.</li>
+            </ul>
+        </section>
 
-        <h3>4.4 Respaldo y Estadísticas</h3>
-        <p>Usando el botón de <strong>Exportar Excel</strong>, el Administrador puede descargar la base de datos completa a un archivo .xlsx para cálculos y respaldos.</p>
-        
-        <div style="margin-top: 50px; text-align: center; padding-top: 20px; border-top: 2px solid #1e3a8a;">
-            <p style="color: #1e3a8a; font-weight: bold; margin-bottom: 5px; font-size: 1.1em;">Unidad de Informática 2026</p>
-            <p style="font-family: 'Dancing Script', cursive; font-size: 2.2em; color: #1e3a8a; margin-top: 0;">Universidad de los Maestros</p>
-        </div>
+        <section id="aws">
+            <h2>8. Infraestructura Cloud (AWS EC2), Despliegue y Respaldo Externo</h2>
+            <ul>
+                <li><strong>Producción HTTPS:</strong> <code>https://3.133.148.107/</code> atendida por <strong>Nginx</strong> (HTTPS + HTTP/2) con proxy inverso hacia <code>127.0.0.1:3001</code> (<code>HOST=127.0.0.1</code> en <code>.env</code>).</li>
+                <li><strong>Renovación SSL:</strong> Certificado automático gestionado vía cron en <code>/etc/cron.d/certbot-sigoa-ip</code> (<code>enable-https-ip-aws.sh</code>; script alternativo para dominio propio en <code>enable-https-aws.sh</code>).</li>
+                <li><strong>PM2 y Rotación de Logs:</strong> Proceso <code>upel-sigoa</code> supervisado por PM2 con <code>pm2-logrotate 3.0.1</code> (<code>max_size 10M</code>, <code>retain 7</code>, <code>compress true</code>).</li>
+                <li><strong>Despliegue Automatizado (<code>SUBIR_A_AWS.bat</code> + <code>server/deploy/deploy.sh</code>):</strong> Hace <code>git push</code>, genera snapshot previo <code>pre_deploy_*.sql</code> con <code>--no-tablespaces</code> (retención de 10 respaldos en EC2), compila <code>dist/</code>, recarga PM2, valida <code>/api/health</code> y descarga automáticamente por SCP el último <code>pre_deploy_*.sql</code> a la carpeta local <code>backups_aws/</code> (excluida en <code>.gitignore</code>).</li>
+                <li><strong>Descarga Manual de Respaldo:</strong> <code>DESCARGAR_RESPALDO_AWS.bat</code> permite extraer el snapshot más reciente de AWS hacia Windows bajo demanda.</li>
+            </ul>
+        </section>
+
+        <section id="local">
+            <h2>9. Operación Local y Mantenimiento en Windows</h2>
+            <table>
+                <thead>
+                    <tr><th>Archivo Batch</th><th>Función</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>INICIAR_TALENTO_HUMANO.bat</code></td><td>Arranca backend Node (<code>server/index.js</code>) e interfaz Vite en navegador local para uso institucional diario</td></tr>
+                    <tr><td><code>INICIAR_MODO_DESARROLLO.bat</code></td><td>Arranca backend Node y Vite con recarga en caliente (Hot-Reload) para desarrollo</td></tr>
+                    <tr><td><code>EJECUTAR_RESPALDO_Y_MANTENIMIENTO.bat</code></td><td>Ejecuta <code>node server/scripts/backup_automatizado.js</code> en ambiente local</td></tr>
+                    <tr><td><code>SUBIR_A_AWS.bat</code></td><td>Despliegue completo hacia GitHub + AWS EC2 + descarga de respaldo externo</td></tr>
+                    <tr><td><code>DESCARGAR_RESPALDO_AWS.bat</code></td><td>Descarga por SCP del último respaldo SQL almacenado en la instancia AWS EC2</td></tr>
+                </tbody>
+            </table>
+            <div class="caution"><strong>Importante en operación local:</strong> No cierre las ventanas de consola abiertas por <code>INICIAR_TALENTO_HUMANO.bat</code> mientras el sistema esté siendo utilizado en red local, ya que detendrían el servidor backend o la interfaz Vite.</div>
+        </section>
+
+        <section id="qa">
+            <h2>10. Aseguramiento de Calidad (QA), Pruebas e Incidentes</h2>
+            <pre><code>npm.cmd run lint       # Análisis estático oxlint (objetivo: 0 warnings, 0 errors)
+npm.cmd run build      # Compilación de producción Vite hacia dist/
+npm.cmd test           # Pruebas unitarias 3NF e integración real Express + MySQL
+npm.cmd run test:e2e   # Verificación End-to-End de flujos críticos en navegador</code></pre>
+            <table>
+                <thead>
+                    <tr><th>Incidente</th><th>Diagnóstico y Acción</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Error en <code>/api/health</code></td><td>Verificar servicio MySQL/MariaDB local o en EC2 (<code>sudo systemctl status mysql</code>) y revisar <code>pm2 logs upel-sigoa</code>.</td></tr>
+                    <tr><td>Bloqueo tras intentos en <code>/login</code></td><td>Rate limiter de 5 intentos por IP: esperar 5 minutos o validar usuario con <code>ADMIN</code>.</td></tr>
+                    <tr><td>Pantalla de Modo Mantenimiento</td><td>Ingresar como <code>ADMIN</code> a <code>/respaldos</code> -&gt; pestaña Modo Mantenimiento y desactivar <code>strictLockout</code> al finalizar.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer class="doc-footer">
+            <p style="color:#1e3a8a;font-weight:700;margin-bottom:4px;font-size:1.05em;">Unidad de Informática · Subdirección de Docencia · Talento Humano (2026)</p>
+            <p style="font-family:'Dancing Script',cursive;font-size:2.1em;color:#1e3a8a;margin:0;">Universidad de los Maestros</p>
+        </footer>
     </div>
 </body>
 </html>

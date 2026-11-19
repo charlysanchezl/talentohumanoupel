@@ -156,10 +156,7 @@ export function useStaffValidation({
       seccion: m.seccion || '',
       cupos: m.cupos || '',
       inscritos: m.inscritos || '',
-      cohorte: (() => {
-        const raw = (m.cohorte !== undefined && m.cohorte !== null) ? String(m.cohorte).trim() : '';
-        return (raw && raw !== periodo && raw !== '2026-I' && raw !== '2026-II') ? raw : '';
-      })(),
+      cohorte: (m.cohorte !== undefined && m.cohorte !== null) ? String(m.cohorte).trim() : '',
       horasSemanal: m.horasSemanal || 0,
       horasLapso: m.horasLapso || 0
     })));

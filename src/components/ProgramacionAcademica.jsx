@@ -244,7 +244,7 @@ const ProgramacionAcademica = () => {
             (mat.inscritos !== undefined && mat.inscritos !== null && mat.inscritos !== '') ? mat.inscritos : (mat.inscrito || ""),
             isPeriodPlanificacion ? "Pendiente por Asignar" : `${staff.apellidos} ${staff.nombres}`,
             isPeriodPlanificacion ? "" : staff.cedula,
-            (mat.cohorte && mat.cohorte !== staff.periodoAcademico && mat.cohorte !== '2026-I' && mat.cohorte !== '2026-II') ? mat.cohorte : "",
+            (mat.cohorte !== undefined && mat.cohorte !== null && String(mat.cohorte).trim() !== '') ? String(mat.cohorte).trim() : "",
             mat.horasSemanal,
             mat.horasLapso,
             normalizeDepartmentName(staff.department) || "General",
