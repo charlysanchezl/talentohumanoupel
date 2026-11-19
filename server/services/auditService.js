@@ -41,7 +41,7 @@ async function flushQueue() {
           values
         );
       } catch (insertErr) {
-        // Fallback por fila individual en caso de que alguna fila tenga caracteres incompatibles
+        // Fallback por fila individual en caso de que alguna fila tenga caracteres incompatibles o FK inválida
         for (const item of batch) {
           try {
             await db.nativeQuery(
@@ -49,6 +49,19 @@ async function flushQueue() {
               [item.usuarioId || null, item.user_name, item.user_role || 'UNKNOWN', item.action, item.details || '', item.clientIp || null, item.userAgent || null]
             );
           } catch (rowErr) {
+            const isFkErr = rowErr && (rowErr.code === 'ER_NO_REFERENCED_ROW_2' || String(rowErr.message || '').includes('fk_audit_usuario_id'));
+            if (isFkErr && item.usuarioId) {
+              try {
+                await db.nativeQuery(
+                  'INSERT INTO audit_logs (usuario_id, user_name, user_role, action, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                  [null, item.user_name, item.user_role || 'UNKNOWN', item.action, item.details || '', item.clientIp || null, item.userAgent || null]
+                );
+                continue;
+              } catch (retryErr) {
+                logger.warn('Aviso en reintento individual de auditoría:', retryErr.message);
+                continue;
+              }
+            }
             logger.warn('Aviso en inserción individual de auditoría:', rowErr.message);
           }
         }
@@ -92,7 +105,8 @@ function logAction(user_name, user_role, action, details, req = null) {
   if (req && req.user) {
     user_name = req.user.username || req.user.name || user_name;
     user_role = req.user.role || user_role;
-    if (req.user.id && Number(req.user.id) < 9000) {
+    // Solo usuarios de la tabla 'usuarios' (nunca DOCENTE_PORTAL, cuyo id corresponde a docentes_v3)
+    if (req.user.role !== 'DOCENTE_PORTAL' && req.user.id && Number(req.user.id) < 9000) {
       usuarioId = Number(req.user.id);
     }
   }
