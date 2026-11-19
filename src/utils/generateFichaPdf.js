@@ -59,16 +59,16 @@ export const generateFichaPdf = async (staff, options = {}) => {
     tableLineWidth: 0.2,
     body: [
       [
-        { content: 'LAPSO:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], width: 20 } },
-        { content: `Total Semanas: ${targetSemanas}`, styles: { width: 70 } },
-        { content: 'PERIODO ACADÉMICO:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], width: 45 } },
-        { content: targetPeriodo, styles: { width: 50 } }
+        { content: 'LAPSO ACADÉMICO:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], width: 32 } },
+        { content: targetPeriodo, styles: { width: 58 } },
+        { content: 'PERIODO ACADÉMICO:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], width: 40 } },
+        { content: `Desde: ${targetDesde}  Hasta: ${targetHasta}`, styles: { width: 55 } }
       ],
       [
         { content: 'DEPARTAMENTO:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
         { content: staff.department || 'General' },
-        { content: 'VIGENCIA:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
-        { content: `Desde: ${targetDesde}  Hasta: ${targetHasta}` }
+        { content: 'TOTAL SEMANAS:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
+        { content: `${targetSemanas}` }
       ]
     ],
     margin: { left: 14, right: 14 }

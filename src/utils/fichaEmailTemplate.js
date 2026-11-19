@@ -42,8 +42,8 @@ export const generateFichaEmailHtml = (staff, options = {}) => {
             ${mat.nombre}
             ${mat.seccion ? `<span style="display: inline-block; background-color: #e0f2fe; color: #0369a1; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">Sec. ${mat.seccion}</span>` : ''}
             ${(() => {
-              const c = mat.cohorte || staff.cohorte || '';
-              return (c && c !== staff.periodoAcademico && c !== '2026-I' && c !== '2026-II') ? `<span style="display: inline-block; background-color: #fef3c7; color: #b45309; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">Cohorte: ${c}</span>` : '';
+              const c = String(mat.cohorte || staff.cohorte || '').trim();
+              return c ? `<span style="display: inline-block; background-color: #fef3c7; color: #b45309; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">Cohorte: ${c}</span>` : '';
             })()}
           </td>
           <td style="border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 12px; color: #475569; text-align: center;">${mat.especialidadDestino || 'General'}</td>
@@ -123,16 +123,16 @@ export const generateFichaEmailHtml = (staff, options = {}) => {
             <td style="padding: 0 28px 16px 28px;">
               <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; font-size: 12px;">
                 <tr>
-                  <td style="padding: 8px 12px; width: 25%; font-weight: bold; color: #003366; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">PERÍODO:</td>
+                  <td style="padding: 8px 12px; width: 25%; font-weight: bold; color: #003366; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">LAPSO ACADÉMICO:</td>
                   <td style="padding: 8px 12px; width: 25%; color: #1e293b; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${staff.periodoAcademico || '2026-I'}</td>
-                  <td style="padding: 8px 12px; width: 25%; font-weight: bold; color: #003366; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">SEMANAS:</td>
-                  <td style="padding: 8px 12px; width: 25%; color: #1e293b; border-bottom: 1px solid #e2e8f0;">${staff.semanas || 15} semanas</td>
+                  <td style="padding: 8px 12px; width: 25%; font-weight: bold; color: #003366; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">PERÍODO ACADÉMICO:</td>
+                  <td style="padding: 8px 12px; width: 25%; color: #1e293b; border-bottom: 1px solid #e2e8f0;">${staff.fechaDesde || '13/04/2026'} al ${staff.fechaHasta || '02/10/2026'}</td>
                 </tr>
                 <tr>
                   <td style="padding: 8px 12px; font-weight: bold; color: #003366; border-right: 1px solid #e2e8f0;">DEPARTAMENTO:</td>
                   <td style="padding: 8px 12px; color: #1e293b; border-right: 1px solid #e2e8f0; font-weight: 600;">${staff.department}</td>
-                  <td style="padding: 8px 12px; font-weight: bold; color: #003366; border-right: 1px solid #e2e8f0;">VIGENCIA:</td>
-                  <td style="padding: 8px 12px; color: #1e293b;">${staff.fechaDesde || '13/04/2026'} al ${staff.fechaHasta || '02/10/2026'}</td>
+                  <td style="padding: 8px 12px; font-weight: bold; color: #003366; border-right: 1px solid #e2e8f0;">TOTAL SEMANAS:</td>
+                  <td style="padding: 8px 12px; color: #1e293b;">${staff.semanas || 15} semanas</td>
                 </tr>
               </table>
             </td>
@@ -298,9 +298,9 @@ export const generateFichaEmailText = (staff, options = {}) => {
   out += `Estimado(a) Profesor(a) ${staff.nombres} ${staff.apellidos} (C.I: ${staff.cedula}):\n\n`;
   out += `Le notificamos formalmente que su Ficha de Oferta Académica para el período ${staff.periodoAcademico || 'Vigente'} en el Departamento de ${staff.department} ha sido validada.\n\n`;
   out += `DATOS DEL PERÍODO:\n`;
-  out += `- Período: ${staff.periodoAcademico || 'Actual'}\n`;
+  out += `- Lapso Académico: ${staff.periodoAcademico || 'Actual'}\n`;
+  out += `- Período Académico: ${staff.fechaDesde || 'N/A'} al ${staff.fechaHasta || 'N/A'}\n`;
   out += `- Semanas: ${staff.semanas || 15} semanas\n`;
-  out += `- Vigencia: ${staff.fechaDesde || 'N/A'} al ${staff.fechaHasta || 'N/A'}\n`;
   out += `- Sede/Centro: ${staff.sedeCentro || 'Rubio'}\n\n`;
   out += `ASIGNACIÓN DE MATERIAS:\n`;
   if (materias.length > 0) {

@@ -258,18 +258,16 @@ const PrintableFicha = ({ staff, onBack }) => {
           <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', fontSize: '8.5pt' }}>
             <tbody>
               <tr>
-                <td style={{ border: '1px solid black', padding: '2px 4px', width: '15%', fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>LAPSO:</td>
-                <td style={{ border: '1px solid black', padding: '2px 4px', width: '35%' }}>
-                  Total Semanas: {displaySemanas}
-                </td>
+                <td style={{ border: '1px solid black', padding: '2px 4px', width: '18%', fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>LAPSO ACADÉMICO:</td>
+                <td style={{ border: '1px solid black', padding: '2px 4px', width: '32%' }}>{displayPeriodo}</td>
                 <td style={{ border: '1px solid black', padding: '2px 4px', width: '20%', fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>PERIODO ACADÉMICO:</td>
-                <td style={{ border: '1px solid black', padding: '2px 4px', width: '30%' }}>{displayPeriodo}</td>
+                <td style={{ border: '1px solid black', padding: '2px 4px', width: '30%' }}>Desde: {displayFechaDesde} Hasta: {displayFechaHasta}</td>
               </tr>
               <tr>
                 <td style={{ border: '1px solid black', padding: '2px 4px', fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>DEPARTAMENTO:</td>
                 <td style={{ border: '1px solid black', padding: '2px 4px' }}>{staff.department}</td>
-                <td style={{ border: '1px solid black', padding: '2px 4px', fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>VIGENCIA:</td>
-                <td style={{ border: '1px solid black', padding: '2px 4px' }}>Desde: {displayFechaDesde} Hasta: {displayFechaHasta}</td>
+                <td style={{ border: '1px solid black', padding: '2px 4px', fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>TOTAL SEMANAS:</td>
+                <td style={{ border: '1px solid black', padding: '2px 4px' }}>{displaySemanas}</td>
               </tr>
             </tbody>
           </table>
