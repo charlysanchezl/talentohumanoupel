@@ -24,6 +24,25 @@ export function formatFechaEspanol(fechaStr) {
 }
 
 /**
+ * Determina si un docente tiene carga académica formalmente validada para exportación.
+ * Aplica de forma uniforme a todos los departamentos y módulos de exportación:
+ * - Estatus debe ser 'Validado', 'Activo' o 'Cerrado' (nunca 'Por Revisar', 'Inactivo' ni 'Sin Carga')
+ * - Debe tener al menos 1 asignatura asignada con horas semanales > 0
+ */
+export function hasValidatedCarga(staff) {
+  if (!staff) return false;
+  const status = String(staff.status || '').trim();
+  const isValidatedStatus = status === 'Validado' || status === 'Activo' || status === 'Cerrado';
+  if (!isValidatedStatus) return false;
+
+  const materias = Array.isArray(staff.materias) ? staff.materias : [];
+  if (materias.length === 0) return false;
+
+  const totSem = materias.reduce((sum, m) => sum + (parseInt(m.horasSemanal, 10) || 0), 0);
+  return totSem > 0;
+}
+
+/**
  * Genera el paquete de datos para la vista previa modal de Auditoría / Fichas a Excel.
  */
 export function buildAuditorExportData({
@@ -34,40 +53,27 @@ export function buildAuditorExportData({
   filterSede = 'Todos'
 }) {
   const activeOrSelectedPeriod = academicPeriodsList.find(p => (filterPeriodo !== 'Todos' ? p.nombre === filterPeriodo : p.estado === 'ACTIVO')) || academicPeriodsList[0];
-  const activePeriod = academicPeriodsList.find(p => p.estado === 'ACTIVO');
   const isPlanning = activeOrSelectedPeriod?.estado === 'PLANIFICACION';
   const periodLabel = activeOrSelectedPeriod?.nombre || (filterPeriodo !== 'Todos' ? filterPeriodo : '2026-I');
 
-  const isLapsoActivo = activePeriod && (activeOrSelectedPeriod?.id === activePeriod.id || activeOrSelectedPeriod?.nombre === activePeriod.nombre || filterPeriodo === 'Todos');
-
-  const staffToExport = filteredAndSortedStaff.filter(staff => {
-    const hasMaterias = Array.isArray(staff.materias) && staff.materias.length > 0;
-    if (!hasMaterias) return false;
-    if (staff.status === 'Por Revisar') return false;
-
-    const isDocenteLapsoActivo = activePeriod && (staff.periodoAcademico === activePeriod.nombre || !staff.periodoAcademico);
-    if (isLapsoActivo && isDocenteLapsoActivo) {
-      return staff.status === 'Validado' || staff.status === 'Activo';
-    }
-    return true;
-  });
+  const staffToExport = filteredAndSortedStaff.filter(staff => hasValidatedCarga(staff));
 
   if (staffToExport.length === 0) {
-    alert(`No hay registros de docentes con carga académica para el período "${periodLabel}".\n\nEn el lapso activo solo se exportan docentes con carga validada, y en lapsos culminados aquellos con asignaciones académicas.`);
+    alert(`No hay registros de docentes con carga validada para el período "${periodLabel}".\n\nSolo se exportan docentes cuya carga académica haya sido formalmente validada (con asignaturas y horas asignadas).`);
     return null;
   }
 
   const vigenciaTexto = isPlanning 
     ? 'Período en Planificación (Sin fechas lectivas)'
     : (activeOrSelectedPeriod && activeOrSelectedPeriod.fechaDesde && activeOrSelectedPeriod.fechaHasta)
-      ? `Vigencia: ${formatFechaEspanol(activeOrSelectedPeriod.fechaDesde)} al ${formatFechaEspanol(activeOrSelectedPeriod.fechaHasta)} (${activeOrSelectedPeriod.semanas || 15} sem)`
+      ? `Período Académico: ${formatFechaEspanol(activeOrSelectedPeriod.fechaDesde)} al ${formatFechaEspanol(activeOrSelectedPeriod.fechaHasta)} (${activeOrSelectedPeriod.semanas || 15} sem)`
       : `(${activeOrSelectedPeriod?.semanas || 15} sem)`;
 
   const headerRows = [
     ["UNIVERSIDAD PEDAGÓGICA EXPERIMENTAL LIBERTADOR"],
     ["INSTITUTO PEDAGÓGICO RURAL GERVASIO RUBIO - UNIDAD DE TALENTO HUMANO"],
     ["MATRIZ AUDITABLE DE TALENTO HUMANO Y FICHAS DE DOCENTES CONTRATADOS"],
-    [`Período Académico: ${activeOrSelectedPeriod?.nombre || (filterPeriodo !== 'Todos' ? filterPeriodo : '2026-I')}${isPlanning ? ' (EN PLANIFICACIÓN)' : ''} | ${vigenciaTexto} | Departamento: ${filterDepartment} | Centro de Atención / Sede: ${filterSede} | Emisión: ${new Date().toLocaleDateString('es-VE')}`],
+    [`Lapso Académico: ${activeOrSelectedPeriod?.nombre || (filterPeriodo !== 'Todos' ? filterPeriodo : '2026-I')}${isPlanning ? ' (EN PLANIFICACIÓN)' : ''} | ${vigenciaTexto} | Departamento: ${filterDepartment} | Centro de Atención / Sede: ${filterSede} | Emisión: ${new Date().toLocaleDateString('es-VE')}`],
     [],
     [
       "N°",
@@ -219,8 +225,7 @@ export function buildOfertaExportData({
       : (`${staff.nombres || ''} ${staff.apellidos || ''}`.trim() || 'Docente UPEL');
     const docCedula = isPlanning ? "" : (staff.cedula || '');
     const rawCoh = (item.cohorte !== undefined && item.cohorte !== null && item.cohorte !== '') ? String(item.cohorte).trim() : '';
-    const isPeriod = rawCoh === '2026-I' || rawCoh === '2026-II' || rawCoh === staff.periodoAcademico;
-    const docPeriodo = (rawCoh && !isPeriod) ? rawCoh : '-';
+    const docPeriodo = rawCoh || '-';
     const docDpto = normalizeDepartmentName(staff.department) || '';
     const docSede = staff.sedeCentro || (filterSede !== 'Todos' ? filterSede : "Rubio");
     const docTipo = isPlanning ? "Por Definir" : (staff.categoriaDocente || "FIJO");

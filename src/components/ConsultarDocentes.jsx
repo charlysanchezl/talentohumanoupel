@@ -14,7 +14,7 @@ import {
 } from '../data';
 import { matchesSearch } from '../utils/searchHelper';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
-import { buildAuditorExportData, buildOfertaExportData } from '../utils/staffExcelExportHelper';
+import { buildAuditorExportData, buildOfertaExportData, hasValidatedCarga } from '../utils/staffExcelExportHelper';
 import { useStaffValidation } from '../hooks/useStaffValidation';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
@@ -229,8 +229,6 @@ const ConsultarDocentes = () => {
   // Consolidación de oferta académica para vista curricular
   const ofertaConsolidada = useMemo(() => {
     const list = [];
-    const activePeriodObj = academicPeriodsList.find(p => p.estado === 'ACTIVO');
-    const activePeriodName = activePeriodObj?.nombre || '2026-II';
 
     staffList.forEach(staff => {
       if (user && user.role === 'JEFE' && user.department) {
@@ -244,14 +242,12 @@ const ConsultarDocentes = () => {
         if (staff.status !== filterStatus && contractStatus !== filterStatus) return;
       }
 
-      // REGLA INSTITUCIONAL UPEL: En la oferta consolidada del lapso activo,
-      // solo debe mostrarse la carga académica formalmente verificada y validada por la Jefatura (status 'Activo' o 'Validado').
+      // REGLA INSTITUCIONAL UPEL: En la oferta consolidada de todos los departamentos,
+      // solo debe mostrarse/exportarse carga académica formalmente validada (salvo en períodos en planificación).
       const targetPeriod = filterPeriodo !== 'Todos' ? filterPeriodo : staff.periodoAcademico;
-      const isLapsoActivo = targetPeriod && activePeriodName && targetPeriod === activePeriodName;
-      if (isLapsoActivo) {
-        const isValidada = staff.status === 'Validado' || staff.status === 'Activo';
-        if (!isValidada) return;
-      }
+      const targetPeriodObj = academicPeriodsList.find(p => p.nombre === targetPeriod);
+      const isPlanningPeriod = targetPeriodObj?.estado === 'PLANIFICACION';
+      if (!isPlanningPeriod && !hasValidatedCarga(staff)) return;
 
       (staff.materias || []).forEach(mat => {
         if (filterPeriodo !== 'Todos') {

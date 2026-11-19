@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { matchDepartment, normalizeDepartmentName } from '../data';
-import { formatFechaEspanol } from '../utils/staffExcelExportHelper';
+import { formatFechaEspanol, hasValidatedCarga } from '../utils/staffExcelExportHelper';
 
 /**
  * Exportador Institucional de Excel Multipestaña para UPEL SIGOA
@@ -12,26 +12,8 @@ import { formatFechaEspanol } from '../utils/staffExcelExportHelper';
  * 5. Catálogo de Asignaturas y Demanda
  */
 export const exportInstitutionalExcel = async ({ staffList = [], materiasCatalogo = [], user = null, periodName = 'Todos' }) => {
-  // Filtrar estrictamente:
-  // 1. Descartar docentes sin materias asignadas.
-  // 2. Descartar docentes con estatus 'Por Revisar' (carga promovida pendiente de validación en lapso activo).
-  // 3. En lapso activo: solo incluir docentes formalmente validados (status 'Validado' o 'Activo').
-  // 4. En lapso cerrado/culminado: incluir los docentes con carga académica histórica de ese lapso culminado.
-  const validStaffList = staffList.filter(d => {
-    if (d.status === 'Por Revisar') return false;
-    const hasMaterias = Array.isArray(d.materias) && d.materias.length > 0;
-    if (!hasMaterias) return false;
-
-    // Si es un lapso cerrado o registro histórico culminado
-    if (d.status === 'Cerrado') return true;
-    if (periodName && periodName !== 'Todos' && periodName !== '2026-II') {
-      return true;
-    }
-
-    // En lapso activo: solo docentes con carga formalmente validada o activa
-    const isValidado = d.status === 'Validado' || d.status === 'Activo';
-    return isValidado;
-  });
+  // Filtrar estrictamente: solo docentes con carga académica formalmente validada (todos los departamentos)
+  const validStaffList = staffList.filter(d => hasValidatedCarga(d));
   staffList = validStaffList;
 
   const workbook = new ExcelJS.Workbook();
@@ -1138,8 +1120,8 @@ export const exportSingleDocenteFichaExcel = async (docente, user = null) => {
 
   // 1. Datos Institucionales y Período
   styleSecHeader('1. PERÍODO ACADÉMICO Y ADSCRIPCIÓN INSTITUCIONAL');
-  addKeyValueRow('Período Académico:', `${docente.periodoAcademico || '2026-I'} (${docente.semanas || 15} semanas)`, 'Estatus Contrato:', docente.status || 'Activo');
-  addKeyValueRow('Vigencia Lapso:', `Desde: ${docente.fechaDesde || '13/04/2026'} Hasta: ${docente.fechaHasta || '02/10/2026'}`, 'Departamento(s):', docente.department || 'N/A');
+  addKeyValueRow('Lapso Académico:', `${docente.periodoAcademico || '2026-I'} (${docente.semanas || 15} semanas)`, 'Estatus Contrato:', docente.status || 'Activo');
+  addKeyValueRow('Período Académico:', `Desde: ${docente.fechaDesde || '13/04/2026'} Hasta: ${docente.fechaHasta || '02/10/2026'}`, 'Departamento(s):', docente.department || 'N/A');
   addKeyValueRow('Centro de Atención / Sede:', docente.sedeCentro || 'Rubio', 'Especialidad:', docente.especialidad || 'N/A');
   r++;
 
@@ -1277,26 +1259,8 @@ export const exportSingleDocenteFichaExcel = async (docente, user = null) => {
  * académicos, dedicación, horas y detalle de asignaturas).
  */
 export const exportAuditorFichasCompletasExcel = async ({ staffList = [], user = null, periodName = 'Todos', departmentName = 'Todos', sedeName = 'Todas' }) => {
-  // Filtrar estrictamente:
-  // 1. Descartar docentes sin materias asignadas.
-  // 2. Descartar docentes con estatus 'Por Revisar' (carga promovida pendiente de validación en lapso activo).
-  // 3. En lapso activo: solo incluir docentes formalmente validados (status 'Validado' o 'Activo').
-  // 4. En lapso cerrado/culminado: incluir los docentes con carga académica histórica de ese lapso culminado.
-  const validStaffList = staffList.filter(d => {
-    if (d.status === 'Por Revisar') return false;
-    const hasMaterias = Array.isArray(d.materias) && d.materias.length > 0;
-    if (!hasMaterias) return false;
-
-    // Si es un lapso cerrado o registro histórico culminado
-    if (d.status === 'Cerrado') return true;
-    if (periodName && periodName !== 'Todos' && periodName !== '2026-II') {
-      return true;
-    }
-
-    // En lapso activo: solo docentes con carga formalmente validada o activa
-    const isValidado = d.status === 'Validado' || d.status === 'Activo';
-    return isValidado;
-  });
+  // Filtrar estrictamente: solo docentes con carga académica formalmente validada (todos los departamentos)
+  const validStaffList = staffList.filter(d => hasValidatedCarga(d));
   staffList = validStaffList;
 
   const workbook = new ExcelJS.Workbook();
@@ -1482,9 +1446,9 @@ export const exportAuditorFichasCompletasExcel = async ({ staffList = [], user =
       { name: 'Departamento', filterButton: true },
       { name: 'Sede / Centro', filterButton: true },
       { name: 'Especialidad', filterButton: true },
-      { name: 'Período', filterButton: true },
+      { name: 'Lapso Académico', filterButton: true },
       { name: 'Semanas', filterButton: true },
-      { name: 'Vigencia Lapso', filterButton: true },
+      { name: 'Período Académico', filterButton: true },
       { name: 'Estatus Contrato', filterButton: true },
       { name: 'Cant. Materias', filterButton: true, totalsRowFunction: 'sum' },
       { name: 'Horas Semanales', filterButton: true, totalsRowFunction: 'sum' },
@@ -1621,7 +1585,7 @@ export const exportAuditorFichasCompletasExcel = async ({ staffList = [], user =
         m.seccion || m.secciones || '-',
         (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '-',
         (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '-',
-        (m.cohorte && m.cohorte !== d.periodoAcademico && m.cohorte !== '2026-I' && m.cohorte !== '2026-II') ? m.cohorte : '-',
+        (m.cohorte !== undefined && m.cohorte !== null && String(m.cohorte).trim() !== '') ? String(m.cohorte).trim() : '-',
         parseInt(m.horasSemanal) || 0,
         parseInt(m.horasLapso) || 0
       ]);

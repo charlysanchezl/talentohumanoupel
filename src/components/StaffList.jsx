@@ -21,7 +21,7 @@ import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { matchesSearch } from '../utils/searchHelper';
 import { resolveSyncedEspecialidad } from '../hooks/useStaffValidation';
 import { getDocenteContractStatus, getStatusBadgeInfo } from '../utils/contractStatus';
-import { formatFechaEspanol } from '../utils/staffExcelExportHelper';
+import { formatFechaEspanol, hasValidatedCarga } from '../utils/staffExcelExportHelper';
 
 // Subcomponentes modulares de Staff
 import StaffHeader from './staff/StaffHeader';
@@ -294,36 +294,27 @@ const StaffList = () => {
   const handleOpenAuditorPreview = () => {
     try {
       const activeOrSelectedPeriod = academicPeriodsList.find(p => (filterPeriodo !== 'Todos' ? p.nombre === filterPeriodo : p.estado === 'ACTIVO')) || academicPeriodsList[0];
-      const activePeriod = academicPeriodsList.find(p => p.estado === 'ACTIVO');
       const isPlanning = activeOrSelectedPeriod?.estado === 'PLANIFICACION';
       const periodLabel = activeOrSelectedPeriod?.nombre || (filterPeriodo !== 'Todos' ? filterPeriodo : '2026-I');
 
-      const isLapsoActivo = activePeriod && (activeOrSelectedPeriod?.id === activePeriod.id || activeOrSelectedPeriod?.nombre === activePeriod.nombre || filterPeriodo === 'Todos');
-
-      const staffToExport = filteredStaff.filter(staff => {
-        const isDocenteLapsoActivo = activePeriod && (staff.periodoAcademico === activePeriod.nombre || !staff.periodoAcademico);
-        if (isLapsoActivo && isDocenteLapsoActivo) {
-          return (staff.status === 'Validado' || staff.status === 'Activo') && (staff.materias || []).length > 0;
-        }
-        return true;
-      });
+      const staffToExport = filteredStaff.filter(staff => hasValidatedCarga(staff));
 
       if (staffToExport.length === 0) {
-        alert(`No hay registros de docentes con carga verificada para el período "${periodLabel}"${currentDept !== 'Todos' ? ` en el departamento ${currentDept}` : ''}.\n\nSolo se exportan las fichas de aquellos docentes cuya carga ha sido validada.`);
+        alert(`No hay registros de docentes con carga verificada para el período "${periodLabel}"${currentDept !== 'Todos' ? ` en el departamento ${currentDept}` : ''}.\n\nSolo se exportan las fichas de aquellos docentes cuya carga ha sido formalmente validada.`);
         return;
       }
 
       const vigenciaTexto = isPlanning 
         ? 'Período en Planificación (Sin fechas lectivas)'
         : (activeOrSelectedPeriod && activeOrSelectedPeriod.fechaDesde && activeOrSelectedPeriod.fechaHasta)
-          ? `Vigencia: ${formatFechaEspanol(activeOrSelectedPeriod.fechaDesde)} al ${formatFechaEspanol(activeOrSelectedPeriod.fechaHasta)} (${activeOrSelectedPeriod.semanas || 15} sem)`
+          ? `Período Académico: ${formatFechaEspanol(activeOrSelectedPeriod.fechaDesde)} al ${formatFechaEspanol(activeOrSelectedPeriod.fechaHasta)} (${activeOrSelectedPeriod.semanas || 15} sem)`
           : `(${activeOrSelectedPeriod?.semanas || 15} sem)`;
 
       const headerRows = [
         ["UNIVERSIDAD PEDAGÓGICA EXPERIMENTAL LIBERTADOR"],
         ["INSTITUTO PEDAGÓGICO RURAL GERVASIO RUBIO - UNIDAD DE TALENTO HUMANO"],
         [`MATRIZ AUDITABLE DE TALENTO HUMANO - DEPARTAMENTO: ${currentDept}`],
-        [`Período Académico: ${activeOrSelectedPeriod?.nombre || (filterPeriodo !== 'Todos' ? filterPeriodo : '2026-I')}${isPlanning ? ' (EN PLANIFICACIÓN)' : ''} | ${vigenciaTexto} | Departamento: ${currentDept} | Centro de Atención / Sede: ${filterSede} | Emisión: ${new Date().toLocaleDateString('es-VE')}`],
+        [`Lapso Académico: ${activeOrSelectedPeriod?.nombre || (filterPeriodo !== 'Todos' ? filterPeriodo : '2026-I')}${isPlanning ? ' (EN PLANIFICACIÓN)' : ''} | ${vigenciaTexto} | Departamento: ${currentDept} | Centro de Atención / Sede: ${filterSede} | Emisión: ${new Date().toLocaleDateString('es-VE')}`],
         [],
         [
           "N°", "CÉDULA", "DOCENTE (APELLIDOS Y NOMBRES)", "RIF", "BANCO", "TIPO CUENTA", "Nº CUENTA BANCARIA",
@@ -494,10 +485,7 @@ const StaffList = () => {
       seccion: m.seccion !== undefined && m.seccion !== null ? String(m.seccion) : '',
       cupos: (m.cupos !== undefined && m.cupos !== null && m.cupos !== '') ? m.cupos : '',
       inscritos: (m.inscritos !== undefined && m.inscritos !== null && m.inscritos !== '') ? m.inscritos : '',
-      cohorte: (() => {
-        const raw = (m.cohorte !== undefined && m.cohorte !== null) ? String(m.cohorte).trim() : '';
-        return (raw && raw !== periodo && raw !== '2026-I' && raw !== '2026-II') ? raw : '';
-      })(),
+      cohorte: (m.cohorte !== undefined && m.cohorte !== null) ? String(m.cohorte).trim() : '',
       horasSemanal: parseInt(m.horasSemanal) || 0,
       horasLapso: (parseInt(m.horasSemanal) || 0) * 15
     })));
@@ -609,7 +597,6 @@ const StaffList = () => {
 
   const ofertaConsolidada = useMemo(() => {
     const oferta = [];
-    const activePeriodName = academicPeriodsList.find(p => p.estado === 'ACTIVO')?.nombre || '2026-II';
 
     staffList.forEach(staff => {
       const matchesPeriod = filterPeriodo === 'Todos' || staff.periodoAcademico === filterPeriodo;
@@ -617,14 +604,12 @@ const StaffList = () => {
       const matchesSede = filterSede === 'Todos' || staff.sedeCentro === filterSede;
       if (!matchesPeriod || !matchesStatus || !matchesSede) return;
 
-      // REGLA INSTITUCIONAL UPEL: En la oferta consolidada del lapso activo,
-      // solo debe mostrarse la carga académica formalmente verificada y validada por la Jefatura (status 'Activo' o 'Validado').
+      // REGLA INSTITUCIONAL UPEL: En la oferta consolidada de todos los departamentos,
+      // solo debe mostrarse/exportarse carga académica formalmente validada (salvo en períodos en planificación).
       const targetPeriod = filterPeriodo !== 'Todos' ? filterPeriodo : staff.periodoAcademico;
-      const isLapsoActivo = targetPeriod && activePeriodName && targetPeriod === activePeriodName;
-      if (isLapsoActivo) {
-        const isValidada = (staff.status === 'Validado' || staff.status === 'Activo') && (staff.materias || []).length > 0;
-        if (!isValidada) return;
-      }
+      const targetPeriodObj = academicPeriodsList.find(p => p.nombre === targetPeriod);
+      const isPlanningPeriod = targetPeriodObj?.estado === 'PLANIFICACION';
+      if (!isPlanningPeriod && !hasValidatedCarga(staff)) return;
 
       if (staff.materias && staff.materias.length > 0) {
         staff.materias.forEach(mat => {
